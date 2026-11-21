@@ -1,0 +1,1 @@
+Replace .github/workflows/windows-exe.yml in your GitHub repository with the file in this ZIP. Commit to main, wait for Actions, download the v0.9.1 Portable artifact, extract BOTH folders together. Do not download the older ForeverMarketTracker-Windows artifact.

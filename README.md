@@ -52,3 +52,12 @@ Extract the downloaded ZIP and keep the complete `ForeverMarketTracker` folder t
 - Collection uses a shared interprocess lock, and logs attempts to `%LOCALAPPDATA%/ForeverMarketTracker/collector_events.jsonl`.
 - Daily SQLite-consistent backups are saved to `%LOCALAPPDATA%/ForeverMarketTracker/backups` (14 daily copies). **All historical market snapshots are kept indefinitely**; only the collector health view shows the last 7 days.
 - API pull times are shown from Windows Task Scheduler; if no task is installed, the screen says Not scheduled.
+
+
+## v0.9.2 schedule and UI behaviour
+
+- Blizzard API calls occur only from the Windows hourly scheduled collector at **HH:05**, or when **Collect Now** is clicked. The main GUI has no background API polling timer.
+- The Collector Health page reads local log/database events and receives filesystem change notifications. It does not poll `schtasks` every 30 seconds.
+- Scheduler status is queried when the tab is first constructed, after enabling/disabling the task, or when **Refresh Status** is clicked. Windows subprocesses are launched with `CREATE_NO_WINDOW`.
+- Keep both release folders together. After replacing the release, disable and re-enable the hourly schedule once to ensure its task points to the current collector executable.
+- Historical snapshots are never purged by the seven-day Collector Health view.

@@ -1,9 +1,9 @@
 """Collector health tab: seven-day display, unlimited price history."""
 import time
 from datetime import datetime
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import QFileSystemWatcher, Signal
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QProgressBar,QTableWidget,QTableWidgetItem,QMessageBox,QHeaderView
-from collection_service import recent_events, BACKUP_DIR
+from collection_service import recent_events, BACKUP_DIR, LOG_PATH
 from scheduler import enable_task,disable_task,task_status
 
 class CollectorHealthTab(QWidget):
@@ -26,12 +26,18 @@ class CollectorHealthTab(QWidget):
         self.update_button=QPushButton('Refresh Status');self.update_button.clicked.connect(self.refresh);buttons.addWidget(self.update_button)
         lay.addWidget(QLabel('Recent collection events (last 7 days shown; market prices are never deleted)'))
         self.events=QTableWidget(0,4);self.events.setHorizontalHeaderLabels(['Time (local)','Result','Items','Details']);self.events.horizontalHeader().setSectionResizeMode(3,QHeaderView.ResizeMode.Stretch);lay.addWidget(self.events)
-        self.timer=QTimer(self);self.timer.timeout.connect(self.refresh);self.timer.start(30000)
+        # Observe changes to the local event log without polling Windows Task Scheduler.
+        # QFileSystemWatcher uses OS file notifications, not periodic API requests.
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        LOG_PATH.touch(exist_ok=True)
+        self.watcher=QFileSystemWatcher([str(LOG_PATH)], self)
+        self.watcher.fileChanged.connect(self._event_log_changed)
+        self.schedule_status={'enabled':False,'next':'Not checked'}
         self.refresh()
     def set_running(self,stage):
         self.running=True;self.manual.setEnabled(False);self.progress.setRange(0,0);self.progress_label.setText(stage)
     def set_finished(self,message):
-        self.running=False;self.manual.setEnabled(True);self.progress.setRange(0,100);self.progress.setValue(100);self.progress_label.setText(message);self.refresh()
+        self.running=False;self.manual.setEnabled(True);self.progress.setRange(0,100);self.progress.setValue(100);self.progress_label.setText(message);self.refresh_local()
     def enable_schedule(self):
         try:enable_task();self.refresh()
         except Exception as exc:QMessageBox.warning(self,'Scheduler',str(exc))
@@ -39,9 +45,29 @@ class CollectorHealthTab(QWidget):
         try:disable_task();self.refresh()
         except Exception as exc:QMessageBox.warning(self,'Scheduler',str(exc))
     def refresh(self):
-        status=task_status()
+        # Only explicit refresh / initial opening / schedule changes query schtasks.
+        self.schedule_status=task_status()
+        self.refresh_local()
+
+    def _event_log_changed(self, *_):
+        # FileSystemWatcher is notification-based; no periodic external process.
+        if str(LOG_PATH) not in self.watcher.files() and LOG_PATH.exists():
+            self.watcher.addPath(str(LOG_PATH))
+        self.refresh_local()
+
+    def refresh_local(self):
+        status=self.schedule_status
         self.next_label.setText('Next Blizzard API pull: '+status['next'] if status['enabled'] else 'Next Blizzard API pull: Not scheduled (enable hourly collection)')
         events=recent_events()
+        if events and not self.running:
+            latest=events[-1]
+            if latest.get('status')=='started':
+                self.progress.setRange(0,0)
+                self.progress_label.setText('Scheduled Blizzard collection in progress…' if latest.get('origin')=='scheduled' else 'Collection in progress…')
+            elif latest.get('status') in ('success','failed'):
+                self.progress.setRange(0,100)
+                self.progress.setValue(100 if latest['status']=='success' else 0)
+                self.progress_label.setText('Last collection: '+latest['status']+' — '+latest.get('detail',''))
         successes=[e for e in events if e.get('status')=='success']
         if successes:
             last=successes[-1];self.last_label.setText('Last successful collection: '+datetime.fromtimestamp(last['timestamp']).strftime('%d %b %Y %H:%M')+f" — {last.get('count',0):,} items")

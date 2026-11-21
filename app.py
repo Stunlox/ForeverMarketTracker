@@ -1,7 +1,7 @@
 import sys, time, traceback
 from pathlib import Path
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import Qt,QThread,Signal,QTimer
+from PySide6.QtCore import Qt,QThread,Signal
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLineEdit,QComboBox,QTableWidget,QTableWidgetItem,QLabel,QTabWidget,QFormLayout,QSpinBox,QMessageBox,QHeaderView,QAbstractItemView,QSplitter)
 from PySide6.QtCharts import QChart,QChartView,QLineSeries,QValueAxis
 from core import connect,load_settings,save_settings,store_snapshot,market_rows,history,copper,import_catalogue
@@ -25,7 +25,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 0.9 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 0.9.2 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
@@ -33,7 +33,6 @@ class Main(QMainWindow):
         self.health=CollectorHealthTab(self.db);self.tabs.addTab(self.health,'Collector Health');self.health.collect_requested.connect(self.scan)
         self.config=QWidget();self.tabs.addTab(self.config,'API & Settings');self.setup_config()
         self.statusBar().showMessage('Local database ready. API not yet validated.')
-        self.timer=QTimer(self);self.timer.timeout.connect(self.health.refresh);self.timer.start(60000)
         self.refresh()
     def setup_market(self):
         lay=QVBoxLayout(self.market);top=QHBoxLayout();lay.addLayout(top)
@@ -112,9 +111,6 @@ class Main(QMainWindow):
             self.statusBar().showMessage(f'Imported {count:,} item records from ForeverDB')
             self.refresh()
         self.work(fn,done)
-    def tick(self):
-        # Collection is owned by Windows Task Scheduler, not a second in-app timer.
-        self.health.refresh()
     def refresh(self,*_):
         cats=['All']+[r[0] for r in self.db.execute('SELECT DISTINCT category FROM items ORDER BY category') if r[0]]
         selected=self.category.currentText();self.category.blockSignals(True);self.category.clear();self.category.addItems(cats);self.category.setCurrentText(selected if selected in cats else 'All');self.category.blockSignals(False)

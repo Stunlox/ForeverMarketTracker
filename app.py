@@ -8,6 +8,8 @@ from core import connect,load_settings,save_settings,store_snapshot,market_rows,
 from api import AuctionClient,fetch_catalogue
 from timing_tab import MarketTimingTab
 from simplified_tab import SimplifiedTimingTab
+from collector_health import CollectorHealthTab
+from collection_service import collect_once
 
 def resource_path(relative):
     base = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
@@ -23,14 +25,15 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 0.8.2 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 0.9 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
         self.simplified=SimplifiedTimingTab(self.db);self.tabs.addTab(self.simplified,'Market Timing Simplified')
+        self.health=CollectorHealthTab(self.db);self.tabs.addTab(self.health,'Collector Health');self.health.collect_requested.connect(self.scan)
         self.config=QWidget();self.tabs.addTab(self.config,'API & Settings');self.setup_config()
         self.statusBar().showMessage('Local database ready. API not yet validated.')
-        self.timer=QTimer(self);self.timer.timeout.connect(self.tick);self.timer.start(60000)
+        self.timer=QTimer(self);self.timer.timeout.connect(self.health.refresh);self.timer.start(60000)
         self.refresh()
     def setup_market(self):
         lay=QVBoxLayout(self.market);top=QHBoxLayout();lay.addLayout(top)
@@ -78,15 +81,23 @@ class Main(QMainWindow):
         self.work(lambda:AuctionClient(self.settings).discover_houses(),done)
 
     def scan(self):
-        self.save();self.statusBar().showMessage('Validating endpoint and fetching auction snapshot...')
-        def fn():
-            payload=AuctionClient(self.settings).fetch()
-            db=connect()
-            try:return store_snapshot(db,payload)
-            finally:db.close()
+        if self.worker and self.worker.isRunning():
+            self.statusBar().showMessage('Another operation is already running')
+            return
+        self.save()
+        self.health.set_running('Fetching Blizzard auction data...')
+        self.statusBar().showMessage('Collecting Blizzard auction snapshot...')
         def done(count):
-            self.last_check=time.time();self.statusBar().showMessage(f'Validated snapshot: {count} priced items.');self.refresh()
-        self.work(fn,done)
+            self.last_check=time.time()
+            self.health.set_finished(f'Completed: {count:,} priced items saved')
+            self.statusBar().showMessage(f'Validated snapshot: {count:,} priced items.')
+            self.refresh()
+        def failed(msg):
+            self.health.set_finished('Collection failed: '+msg)
+            self.statusBar().showMessage('Collection failed')
+            QMessageBox.warning(self,'Collection failed',msg)
+        self.worker=Worker(lambda:collect_once('manual'))
+        self.worker.done.connect(done);self.worker.failed.connect(failed);self.worker.start()
     def catalogue(self):
         self.save()
         if self.worker and self.worker.isRunning():return
@@ -102,10 +113,8 @@ class Main(QMainWindow):
             self.refresh()
         self.work(fn,done)
     def tick(self):
-        row=self.db.execute('SELECT MAX(captured_at) FROM snapshots').fetchone()
-        last=row[0] or 0
-        if time.time()-last>=self.settings['interval_minutes']*60 and self.settings.get('client_id') and self.settings.get('client_secret') and self.settings.get('house_id'):
-            if time.time()-self.last_check>300:self.last_check=time.time();self.scan()
+        # Collection is owned by Windows Task Scheduler, not a second in-app timer.
+        self.health.refresh()
     def refresh(self,*_):
         cats=['All']+[r[0] for r in self.db.execute('SELECT DISTINCT category FROM items ORDER BY category') if r[0]]
         selected=self.category.currentText();self.category.blockSignals(True);self.category.clear();self.category.addItems(cats);self.category.setCurrentText(selected if selected in cats else 'All');self.category.blockSignals(False)

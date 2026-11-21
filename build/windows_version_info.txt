@@ -3,10 +3,10 @@ VSVersionInfo(
   kids=[StringFileInfo([StringTable('040904B0', [
     StringStruct('CompanyName', 'Forever Market Tracker Project'),
     StringStruct('FileDescription', 'Forever Market Tracker desktop auction analysis'),
-    StringStruct('FileVersion', '0.8.2.0'),
+    StringStruct('FileVersion', '0.9.0.0'),
     StringStruct('InternalName', 'ForeverMarketTracker'),
     StringStruct('OriginalFilename', 'ForeverMarketTracker.exe'),
     StringStruct('ProductName', 'Forever Market Tracker'),
-    StringStruct('ProductVersion', '0.8.2')
+    StringStruct('ProductVersion', '0.9.0')
   ])]), VarFileInfo([VarStruct('Translation', [1033, 1200])])]
 )

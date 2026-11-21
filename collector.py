@@ -1,12 +1,6 @@
-"""Headless collector for Windows Task Scheduler. Run hourly when PC is awake."""
+"""Headless hourly collector, invoked by Windows Task Scheduler."""
 import sys
-from core import connect,load_settings,store_snapshot
-from api import AuctionClient
-
-def main():
-    settings=load_settings();payload=AuctionClient(settings).fetch();db=connect()
-    try: print(f'Stored {store_snapshot(db,payload)} items')
-    finally:db.close()
+from collection_service import collect_once
 if __name__=='__main__':
-    try:main()
+    try:print(f'Stored {collect_once("scheduled"):,} items')
     except Exception as exc:print(f'Collection failed: {exc}',file=sys.stderr);sys.exit(1)

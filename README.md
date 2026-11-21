@@ -42,3 +42,13 @@ Extract the downloaded ZIP and keep the complete `ForeverMarketTracker` folder t
 - Includes a branded ICO and PNG in `assets/`, embedded in the executable and displayed in the window/taskbar.
 - Historical auction snapshots remain in the persistent SQLite database. A seven-day Collector Health display (planned for v0.9) will only filter the UI, not purge stored market data.
 - Backup retention and log retention are separate from auction history; the v0.9 collector is not implemented in this icon-only update.
+
+
+## v0.9 Collector Health
+- Open **Collector Health** to see next scheduled Blizzard pull, last successful pull, collector progress and recent results.
+- Click **Enable Hourly Schedule** after extracting the full portable ZIP to a permanent location. This creates a current-user Windows Task Scheduler task that runs the sibling `ForeverMarketCollector.exe` every hour, at five minutes past the hour. Windows must be on and user scheduling must be permitted.
+- **Collect Now** runs immediately and displays an indeterminate progress bar while the download and database save are in progress. The bar indicates activity, not an exact percentage.
+- The scheduled task continues even if the GUI is closed. Do not move the extracted application folders without disabling and re-enabling the task.
+- Collection uses a shared interprocess lock, and logs attempts to `%LOCALAPPDATA%/ForeverMarketTracker/collector_events.jsonl`.
+- Daily SQLite-consistent backups are saved to `%LOCALAPPDATA%/ForeverMarketTracker/backups` (14 daily copies). **All historical market snapshots are kept indefinitely**; only the collector health view shows the last 7 days.
+- API pull times are shown from Windows Task Scheduler; if no task is installed, the screen says Not scheduled.

@@ -1,0 +1,61 @@
+"""Collector health tab: seven-day display, unlimited price history."""
+import time
+from datetime import datetime
+from PySide6.QtCore import QTimer, Signal
+from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QProgressBar,QTableWidget,QTableWidgetItem,QMessageBox,QHeaderView
+from collection_service import recent_events, BACKUP_DIR
+from scheduler import enable_task,disable_task,task_status
+
+class CollectorHealthTab(QWidget):
+    collect_requested=Signal()
+    def __init__(self,db,parent=None):
+        super().__init__(parent);self.db=db;self.running=False
+        lay=QVBoxLayout(self)
+        title=QLabel('COLLECTOR HEALTH');title.setStyleSheet('font-size:20px;font-weight:bold;');lay.addWidget(title)
+        self.next_label=QLabel('Next Blizzard API pull: checking scheduler...');lay.addWidget(self.next_label)
+        self.last_label=QLabel('Last successful collection: —');lay.addWidget(self.last_label)
+        self.coverage=QLabel('Last 7 days: —');lay.addWidget(self.coverage)
+        self.database=QLabel('Historical database: retained indefinitely');lay.addWidget(self.database)
+        self.backups=QLabel('Backups: —');lay.addWidget(self.backups)
+        self.progress_label=QLabel('Collector idle');lay.addWidget(self.progress_label)
+        self.progress=QProgressBar();self.progress.setRange(0,100);self.progress.setValue(0);lay.addWidget(self.progress)
+        buttons=QHBoxLayout();lay.addLayout(buttons)
+        self.manual=QPushButton('Collect Now');self.manual.clicked.connect(self.collect_requested.emit);buttons.addWidget(self.manual)
+        self.enable=QPushButton('Enable Hourly Schedule');self.enable.clicked.connect(self.enable_schedule);buttons.addWidget(self.enable)
+        self.disable=QPushButton('Disable Schedule');self.disable.clicked.connect(self.disable_schedule);buttons.addWidget(self.disable)
+        self.update_button=QPushButton('Refresh Status');self.update_button.clicked.connect(self.refresh);buttons.addWidget(self.update_button)
+        lay.addWidget(QLabel('Recent collection events (last 7 days shown; market prices are never deleted)'))
+        self.events=QTableWidget(0,4);self.events.setHorizontalHeaderLabels(['Time (local)','Result','Items','Details']);self.events.horizontalHeader().setSectionResizeMode(3,QHeaderView.ResizeMode.Stretch);lay.addWidget(self.events)
+        self.timer=QTimer(self);self.timer.timeout.connect(self.refresh);self.timer.start(30000)
+        self.refresh()
+    def set_running(self,stage):
+        self.running=True;self.manual.setEnabled(False);self.progress.setRange(0,0);self.progress_label.setText(stage)
+    def set_finished(self,message):
+        self.running=False;self.manual.setEnabled(True);self.progress.setRange(0,100);self.progress.setValue(100);self.progress_label.setText(message);self.refresh()
+    def enable_schedule(self):
+        try:enable_task();self.refresh()
+        except Exception as exc:QMessageBox.warning(self,'Scheduler',str(exc))
+    def disable_schedule(self):
+        try:disable_task();self.refresh()
+        except Exception as exc:QMessageBox.warning(self,'Scheduler',str(exc))
+    def refresh(self):
+        status=task_status()
+        self.next_label.setText('Next Blizzard API pull: '+status['next'] if status['enabled'] else 'Next Blizzard API pull: Not scheduled (enable hourly collection)')
+        events=recent_events()
+        successes=[e for e in events if e.get('status')=='success']
+        if successes:
+            last=successes[-1];self.last_label.setText('Last successful collection: '+datetime.fromtimestamp(last['timestamp']).strftime('%d %b %Y %H:%M')+f" — {last.get('count',0):,} items")
+        since=time.time()-7*86400
+        recent=[e for e in events if e.get('timestamp',0)>=since and e.get('status') in ('success','failed')]
+        success=sum(e['status']=='success' for e in recent)
+        self.coverage.setText(f'Last 7 days: {success} successful / {len(recent)} completed attempts (not a scheduled-slot success rate)')
+        count=self.db.execute('SELECT COUNT(*),MIN(captured_at),MAX(captured_at) FROM snapshots').fetchone()
+        size=__import__('core').DB_PATH.stat().st_size if __import__('core').DB_PATH.exists() else 0
+        self.database.setText(f'Historical database: {count[0]:,} snapshots retained | {size/1048576:.1f} MB | no 7-day purge')
+        backups=list(BACKUP_DIR.glob('market-*.sqlite3')) if BACKUP_DIR.exists() else []
+        self.backups.setText(f'Daily backups: {len(backups)} retained (maximum 14)')
+        recent=recent[-100:][::-1]
+        self.events.setRowCount(len(recent))
+        for i,e in enumerate(recent):
+            values=[datetime.fromtimestamp(e.get('timestamp',0)).strftime('%d %b %H:%M'),e.get('status',''),str(e.get('count') or ''),e.get('detail','')]
+            for j,val in enumerate(values):self.events.setItem(i,j,QTableWidgetItem(val))

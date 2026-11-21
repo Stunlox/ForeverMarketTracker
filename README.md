@@ -36,3 +36,9 @@ The GitHub Actions build now uses PyInstaller `--onedir` for both the GUI and op
 This project is **not code-signed**. Version metadata is not a digital signature and does not establish publisher identity or prove safety. This packaging change may reduce some antivirus heuristics but cannot guarantee that Firefox or Defender will accept the release. If security software reports malware, do not bypass it; inspect the exact detection, review the source/build, and scan the generated binaries independently. For distribution to friends, consider trusted code signing after confirming build integrity.
 
 Extract the downloaded ZIP and keep the complete `ForeverMarketTracker` folder together. Launch `ForeverMarketTracker/ForeverMarketTracker.exe`. The optional `ForeverMarketCollector` is in its own folder.
+
+
+## v0.8.2 icon and historical retention
+- Includes a branded ICO and PNG in `assets/`, embedded in the executable and displayed in the window/taskbar.
+- Historical auction snapshots remain in the persistent SQLite database. A seven-day Collector Health display (planned for v0.9) will only filter the UI, not purge stored market data.
+- Backup retention and log retention are separate from auction history; the v0.9 collector is not implemented in this icon-only update.

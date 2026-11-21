@@ -1,4 +1,6 @@
 import sys, time, traceback
+from pathlib import Path
+from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt,QThread,Signal,QTimer
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLineEdit,QComboBox,QTableWidget,QTableWidgetItem,QLabel,QTabWidget,QFormLayout,QSpinBox,QMessageBox,QHeaderView,QAbstractItemView,QSplitter)
 from PySide6.QtCharts import QChart,QChartView,QLineSeries,QValueAxis
@@ -6,6 +8,10 @@ from core import connect,load_settings,save_settings,store_snapshot,market_rows,
 from api import AuctionClient,fetch_catalogue
 from timing_tab import MarketTimingTab
 from simplified_tab import SimplifiedTimingTab
+
+def resource_path(relative):
+    base = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+    return str(base / relative)
 
 STYLE='''QWidget {background:#101720;color:#e5edf6;font: 12px "Segoe UI";} QLineEdit,QComboBox,QSpinBox {background:#1d2938;border:1px solid #344456;border-radius:5px;padding:7px;} QPushButton {background:#245c72;border:0;border-radius:5px;padding:9px 14px;font-weight:600;} QPushButton:hover {background:#307f96;} QTableWidget {background:#172231;alternate-background-color:#1d2938;gridline-color:#29384a;selection-background-color:#236b75;} QHeaderView::section {background:#253548;color:#b9ccdf;padding:8px;border:0;} QTabWidget::pane {border:1px solid #344456;} QTabBar::tab {padding:11px 20px;background:#1c2a3a;} QTabBar::tab:selected {background:#28677b;}'''
 class Worker(QThread):
@@ -17,7 +23,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 0.8 | Alliance PvP');self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 0.8.2 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
@@ -128,4 +134,4 @@ class Main(QMainWindow):
         y=QValueAxis();y.setTitleText('Gold');y.setRange(0,max(1,max(r[1] for r in data)/10000*1.1))
         self.chart.addAxis(x,Qt.AlignmentFlag.AlignBottom);self.chart.addAxis(y,Qt.AlignmentFlag.AlignLeft);series.attachAxis(x);series.attachAxis(y)
 if __name__=='__main__':
-    app=QApplication(sys.argv);app.setStyleSheet(STYLE);win=Main();win.show();sys.exit(app.exec())
+    app=QApplication(sys.argv);app.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));app.setStyleSheet(STYLE);win=Main();win.show();sys.exit(app.exec())

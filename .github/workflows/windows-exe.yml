@@ -1,42 +1,53 @@
-
-name: Build Windows executable
-
+name: Build Windows portable release
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
+          cache: 'pip'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install pyinstaller
-
+          python -m pip install pyinstaller==6.16.0
       - name: Run tests
         run: python -m unittest discover -p "test_*.py" -v
-
-      - name: Build Windows EXE
-        run: python -m PyInstaller --onefile --windowed --name ForeverMarketTracker --collect-all PySide6.QtCharts app.py
-
-      - name: Upload EXE
+      - name: Build desktop application (portable folder)
+        run: python -m PyInstaller --noconfirm --clean --onedir --windowed --name ForeverMarketTracker --icon assets/app_icon.ico --add-data "assets/app_icon.png;assets" --version-file build/windows_version_info.txt --collect-all PySide6.QtCharts --collect-all tzdata app.py
+      - name: Build optional collector (portable folder)
+        run: python -m PyInstaller --noconfirm --clean --onedir --console --name ForeverMarketCollector --collect-all tzdata collector.py
+      - name: Verify both executables exist
+        shell: pwsh
+        run: |
+          if (!(Test-Path 'dist/ForeverMarketTracker/ForeverMarketTracker.exe')) { throw 'Main executable missing' }
+          if (!(Test-Path 'dist/ForeverMarketCollector/ForeverMarketCollector.exe')) { throw 'Background collector executable missing' }
+      - name: Prepare distribution and SHA-256 manifest
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item -Recurse dist/ForeverMarketTracker release/ForeverMarketTracker
+          Copy-Item -Recurse dist/ForeverMarketCollector release/ForeverMarketCollector
+          Copy-Item build/RELEASE_README.txt release/README.txt
+          $paths = @('release/ForeverMarketTracker/ForeverMarketTracker.exe', 'release/ForeverMarketCollector/ForeverMarketCollector.exe')
+          $lines = foreach ($path in $paths) {
+            $hash = (Get-FileHash -Algorithm SHA256 $path).Hash.ToLowerInvariant()
+            "$hash  $path"
+          }
+          $lines | Set-Content -Encoding ascii release/SHA256SUMS.txt
+          Compress-Archive -Path release/* -DestinationPath ForeverMarketTracker-Windows-v0.9.1-Portable.zip -CompressionLevel Optimal
+      - name: Upload portable Windows distribution
         uses: actions/upload-artifact@v4
         with:
-          name: ForeverMarketTracker-Windows
-          path: dist/ForeverMarketTracker.exe
+          name: ForeverMarketTracker-Windows-v0.9.1-Portable
+          path: ForeverMarketTracker-Windows-v0.9.1-Portable.zip
           if-no-files-found: error
+          retention-days: 30

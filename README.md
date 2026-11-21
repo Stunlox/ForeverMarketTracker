@@ -1,13 +1,12 @@
-# Forever Market Tracker v0.4 — WoW Forever EU Alliance PvP
+# Forever Market Tracker v0.5 — Full ForeverDB Catalogue
 
-This version reuses the **working API endpoints from Forever Gold Companion** (`data_sources.py`): `https://oauth.battle.net/token`, `dynamic-forever-eu`, `/data/wow/ruleset/1/auctions/`, and the separate `/commodities` endpoint. ForeverDB uses the `X-API-Key` header.
+This version imports **all** pages from the official ForeverDB item API, not just the first 100. It preserves the existing SQLite price history and saved credentials. The API is queried with `limit=100` and increasing `offset`, with throttling and retries for 429 responses. Catalogue metadata is committed only when the full download succeeds. Categories are derived from item class/subclass IDs when available; unknown classifications remain Uncategorised.
 
-## Install
-Upload these files to your GitHub repository, replacing the existing source. Keep `.github/workflows/windows-exe.yml` at that exact path. GitHub Actions will build `ForeverMarketTracker.exe` on Windows. Download the artifact from Actions, extract and run.
+## Update
+Upload the extracted files (including `.github/workflows/windows-exe.yml`) to the same GitHub repository, replacing existing files. GitHub Actions builds the standalone Windows EXE. Close v0.4 before launching v0.5. Keep your existing local database in `%USERPROFILE%\AppData\Local\ForeverMarketTracker`.
 
-## Configure
-Your previously saved credentials remain in `%LOCALAPPDATA%\ForeverMarketTracker\settings.json`. In API & Settings click **Discover WoW Forever auction houses**. Confirm which returned house is **Alliance PvP**, enter its numeric ID, save, then click **Fetch Alliance PvP snapshot**. Do not assume 110 without confirming its market grouping.
+In **API & Settings**, keep the existing credentials, enter `https://foreverdb.net/api/v1/items` (or leave URL blank), then click **Import FULL ForeverDB catalogue**. The import should retrieve about 23,805 item records (the count changes as ForeverDB updates). This is metadata only: auction snapshots still come from the Blizzard Forever endpoint hourly while the GUI is open.
 
-The collector fetches normal auctions and commodities together, then stores one combined snapshot. Collection repeats hourly while the GUI is open; background collection while closed requires scheduling the collector executable using Windows Task Scheduler.
+The importer is manual in v0.5; monthly auto-refresh is not yet implemented. No credentials are embedded in this public source ZIP. Never upload your local settings.json.
 
-**Limitations:** This code has unit tests but has not been validated against your live API credentials. The catalogue importer is single-page and needs a confirmed ForeverDB catalogue endpoint; automatic monthly catalogue updates and exact WoW category hierarchy remain future work. Historical prices are asking prices, not sales. Credentials are stored locally in plain text and must not be committed to public GitHub.
+ForeverDB item metadata credit: https://foreverdb.net. Their API terms require visible credit and prohibit distributing API keys in applications.

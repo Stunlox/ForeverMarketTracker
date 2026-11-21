@@ -73,21 +73,47 @@ def store_snapshot(db,payload,source='Blizzard API'):
         db.executemany("INSERT OR IGNORE INTO items(item_id,name,updated_at) VALUES (?, ?, ?)",[(item,f'Item #{item}',int(time.time())) for item in data])
     return len(data)
 
+ITEM_CLASSES = {0:'Consumables',1:'Containers',2:'Weapons',3:'Gems',4:'Armor',5:'Reagents',6:'Projectiles',7:'Trade Goods',8:'Generic',9:'Recipes',10:'Currency',11:'Quivers',12:'Quest Items',13:'Keys',14:'Permanent',15:'Miscellaneous',16:'Glyphs'}
+WEAPON_SUBCLASSES = {0:'Axes (1H)',1:'Axes (2H)',2:'Bows',3:'Guns',4:'Maces (1H)',5:'Maces (2H)',6:'Polearms',7:'Swords (1H)',8:'Swords (2H)',10:'Staves',13:'Fist Weapons',15:'Daggers',16:'Thrown',18:'Crossbows',19:'Wands',20:'Fishing Poles'}
+ARMOR_SUBCLASSES = {0:'Miscellaneous',1:'Cloth',2:'Leather',3:'Mail',4:'Plate',6:'Shields',7:'Librams',8:'Idols',9:'Totems'}
+TRADE_SUBCLASSES = {0:'Trade Goods',1:'Parts',2:'Explosives',3:'Devices',4:'Jewelcrafting',5:'Cloth',6:'Leather',7:'Metal & Stone',8:'Meat',9:'Herbs',10:'Elemental',11:'Other',12:'Enchanting',13:'Materials'}
+
+def _number_or_none(value):
+    if isinstance(value,dict): value=value.get('id',value.get('value'))
+    try: return int(value)
+    except (ValueError,TypeError): return None
+
+def _category(obj):
+    cls=obj.get('classId',obj.get('class_id',obj.get('itemClass',obj.get('item_class',obj.get('class')))))
+    sub=obj.get('subclassId',obj.get('subclass_id',obj.get('subclass',obj.get('item_subclass'))))
+    cls_id=_number_or_none(cls); sub_id=_number_or_none(sub)
+    category=ITEM_CLASSES.get(cls_id)
+    if category is None:
+        raw=obj.get('category') or cls
+        category=raw.get('name') if isinstance(raw,dict) else raw
+    if not isinstance(category,str) or not category.strip():category='Uncategorised'
+    subclass={2:WEAPON_SUBCLASSES,4:ARMOR_SUBCLASSES,7:TRADE_SUBCLASSES}.get(cls_id,{}).get(sub_id)
+    if not subclass:
+        raw=obj.get('subcategory') or sub
+        subclass=raw.get('name') if isinstance(raw,dict) else raw
+    if not isinstance(subclass,str):subclass=''
+    return category,subclass
+
 def import_catalogue(db,items):
     rows=[]
+    now=int(time.time())
     for obj in items:
-        item_id=obj.get('id',obj.get('item_id'))
-        if not isinstance(item_id,int):continue
+        if not isinstance(obj,dict):continue
+        item_id=_number_or_none(obj.get('id',obj.get('item_id')))
+        if item_id is None:continue
         name=obj.get('name') or f'Item #{item_id}'
-        if isinstance(name,dict):name=name.get('en_US') or next(iter(name.values()),f'Item #{item_id}')
-        category=obj.get('category') or obj.get('item_class') or 'Uncategorised'
-        subcategory=obj.get('subcategory') or obj.get('item_subclass') or ''
-        if isinstance(category,dict):category=category.get('name',str(category.get('id','Uncategorised')))
-        if isinstance(subcategory,dict):subcategory=subcategory.get('name',str(subcategory.get('id','')))
-        rows.append((item_id,str(name),str(category),str(subcategory),int(time.time())))
+        if isinstance(name,dict):name=name.get('en_US') or name.get('enGB') or next(iter(name.values()),f'Item #{item_id}')
+        category,subcategory=_category(obj)
+        rows.append((item_id,str(name),category,subcategory,now))
+    if not rows:raise ValueError('No usable item records; catalogue refresh aborted')
     with db:
-        db.executemany('''INSERT INTO items VALUES (?,?,?,?,?) ON CONFLICT(item_id) DO UPDATE SET name=excluded.name,category=excluded.category,subcategory=excluded.subcategory,updated_at=excluded.updated_at''',rows)
-        db.execute("INSERT OR REPLACE INTO metadata VALUES ('catalogue_refreshed',?)",(str(int(time.time())),))
+        db.executemany("INSERT INTO items VALUES (?,?,?,?,?) ON CONFLICT(item_id) DO UPDATE SET name=excluded.name,category=excluded.category,subcategory=excluded.subcategory,updated_at=excluded.updated_at",rows)
+        db.execute("INSERT OR REPLACE INTO metadata VALUES ('catalogue_refreshed',?)",(str(now),))
     return len(rows)
 
 def market_rows(db,search='',category='All',period_days=30):

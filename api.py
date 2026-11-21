@@ -51,21 +51,61 @@ class AuctionClient:
         # Existing store_snapshot accepts combined auctions; commodity prices are per unit.
         return {'auctions': normal['auctions'] + commodities['auctions']}
 
-def fetch_catalogue(settings):
-    """Single-page catalogue import; monthly pagination is not implemented yet."""
-    url = settings.get('foreverdb_url','').strip()
-    if not url:
-        raise ValueError('Enter a verified ForeverDB catalogue endpoint')
-    parsed = urlparse(url)
-    if parsed.scheme != 'https' or parsed.hostname not in ('foreverdb.net','www.foreverdb.net'):
-        raise ValueError('Catalogue must be served from foreverdb.net over HTTPS')
-    response = requests.get(url,headers={'X-API-Key':settings.get('foreverdb_key',''),
-                                          'User-Agent':'ForeverMarketTracker/0.4 (ForeverDB credited)'},timeout=60)
-    response.raise_for_status()
-    payload = response.json()
-    data = payload.get('data',payload) if isinstance(payload,dict) else payload
-    if isinstance(data,list):return data
-    if isinstance(data,dict):
-        for key in ('items','results'):
-            if isinstance(data.get(key),list):return data[key]
-    raise ValueError('Unsupported ForeverDB catalogue response')
+def fetch_catalogue(settings, progress=None):
+    """Fetch the entire ForeverDB item catalogue in pages, respecting rate limits.
+
+    Returns all items only after every page succeeds. A failed page never marks
+    the catalogue as refreshed, so users can retry safely.
+    """
+    import time
+    from urllib.parse import urlparse
+    base = 'https://foreverdb.net/api/v1/items'
+    configured = settings.get('foreverdb_url', '').strip()
+    if configured:
+        parsed = urlparse(configured)
+        if parsed.scheme != 'https' or parsed.hostname not in ('foreverdb.net','www.foreverdb.net') or parsed.path.rstrip('/') != '/api/v1/items':
+            raise ValueError('ForeverDB catalogue URL must be https://foreverdb.net/api/v1/items')
+    key = settings.get('foreverdb_key','').strip()
+    if not key:
+        raise ValueError('Enter your ForeverDB API key in Settings')
+    session = requests.Session()
+    session.headers.update({'X-API-Key':key,'User-Agent':'ForeverMarketTracker/0.5 (personal app; ForeverDB.net credited)'})
+    result = []
+    offset = 0
+    total = None
+    while True:
+        for attempt in range(4):
+            response = session.get(base, params={'limit':100,'offset':offset}, timeout=60)
+            if response.status_code == 429 and attempt < 3:
+                retry = response.headers.get('Retry-After','5')
+                try: delay = min(90,max(1,int(retry)))
+                except ValueError: delay = 5
+                time.sleep(delay)
+                continue
+            response.raise_for_status()
+            break
+        payload = response.json()
+        if not isinstance(payload,dict):
+            raise ValueError('Unexpected ForeverDB catalogue response')
+        data = payload.get('data',[])
+        if isinstance(data,dict):
+            rows = data.get('items',data.get('results',[]))
+        else: rows = data
+        if not isinstance(rows,list):
+            raise ValueError('ForeverDB catalogue response missing items list')
+        meta = payload.get('meta') or {}
+        if isinstance(meta,dict) and meta.get('total') is not None:
+            total = int(meta['total'])
+        if not rows:
+            if total is not None and offset < total:
+                raise ValueError(f'Catalogue ended early at {offset} of {total} items')
+            break
+        result.extend(rows)
+        offset += len(rows)
+        if progress: progress(offset,total)
+        if total is not None and offset >= total: break
+        if len(rows) < 100: break
+        if offset > 100000: raise ValueError('Unexpectedly large catalogue; import stopped')
+        time.sleep(0.12)
+    if not result: raise ValueError('ForeverDB returned no catalogue items')
+    return result

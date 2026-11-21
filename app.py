@@ -14,8 +14,8 @@ class Worker(QThread):
         except Exception as e:self.failed.emit(str(e))
 class Main(QMainWindow):
     def __init__(self):
-        super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None
-        self.setWindowTitle('Forever Market Tracker 0.4 | Alliance PvP');self.resize(1300,820)
+        super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
+        self.setWindowTitle('Forever Market Tracker 0.5 | Alliance PvP');self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.config=QWidget();self.tabs.addTab(self.config,'API & Settings');self.setup_config()
@@ -44,10 +44,11 @@ class Main(QMainWindow):
         save=QPushButton('Save settings');save.clicked.connect(self.save);form.addRow(save)
         discover=QPushButton('Discover WoW Forever auction houses');discover.clicked.connect(self.discover);form.addRow(discover)
         validate=QPushButton('Fetch Alliance PvP snapshot (auctions + commodities)');validate.clicked.connect(self.scan);form.addRow(validate)
-        catalog=QPushButton('Import ForeverDB catalogue');catalog.clicked.connect(self.catalogue);form.addRow(catalog)
+        catalog=QPushButton('Import FULL ForeverDB catalogue (~24k items)');catalog.clicked.connect(self.catalogue);form.addRow(catalog)
+        self.catalogue_status=QLabel('Catalogue not yet refreshed this session');form.addRow(self.catalogue_status)
         form.addRow(QLabel('Credentials stay in local settings.json. This MVP does not encrypt them; protect your Windows account.'))
         form.addRow(QLabel('Select the Alliance PvP house ID from the discovered list. No house ID is assumed.'))
-        form.addRow(QLabel('ForeverDB attribution: item metadata supplied by ForeverDB where configured.'))
+        form.addRow(QLabel('Item metadata: ForeverDB.net — https://foreverdb.net (credit required).'))
     def save(self):
         self.settings.update({k:v.text().strip() for k,v in self.fields.items()});self.settings['interval_minutes']=self.interval.value();self.settings['ah_cut_percent']=self.cut.value();save_settings(self.settings);self.statusBar().showMessage('Settings saved')
     def work(self,fn,on_done):
@@ -78,11 +79,18 @@ class Main(QMainWindow):
         self.work(fn,done)
     def catalogue(self):
         self.save()
+        if self.worker and self.worker.isRunning():return
+        self.catalogue_status.setText('Importing all pages; this may take a minute...')
         def fn():
-            items=fetch_catalogue(self.settings);db=connect()
+            items=fetch_catalogue(self.settings)
+            db=connect()
             try:return import_catalogue(db,items)
             finally:db.close()
-        self.work(fn,lambda count:(self.statusBar().showMessage(f'Imported {count} item records'),self.refresh()))
+        def done(count):
+            self.catalogue_status.setText(f'Full catalogue imported: {count:,} items')
+            self.statusBar().showMessage(f'Imported {count:,} item records from ForeverDB')
+            self.refresh()
+        self.work(fn,done)
     def tick(self):
         row=self.db.execute('SELECT MAX(captured_at) FROM snapshots').fetchone()
         last=row[0] or 0

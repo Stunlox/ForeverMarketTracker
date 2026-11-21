@@ -28,3 +28,11 @@ Upload all files to your existing GitHub repository, replacing prior versions, t
 The new **Market Timing Simplified** tab ranks up to 40 trade goods by historical buy/sell time-slot differences, using the **quantity-weighted cheapest 10% average** captured in v0.7+ hourly snapshots. Columns show typical buy and sell prices, UK-local day/hour windows, estimated margin after configurable AH cut, current supply, sample counts and confidence.
 
 To avoid false signals, the ranking requires at least 14 distinct dates, three snapshots in each compared hour, and observations in at least three distinct calendar weeks for both windows. It only includes trade goods meeting the minimum current supply, and suppresses nonpositive estimated margins. The tab will remain empty until sufficient history is collected. A historical asking-price spread does **not** prove actual sales or realizable profit. No existing SQLite database or settings need to be replaced.
+
+## v0.8.1 — Windows portable distribution (packaging-only update)
+
+The GitHub Actions build now uses PyInstaller `--onedir` for both the GUI and optional collector rather than self-extracting `--onefile` executables. The build produces a portable ZIP containing two application folders, a usage README, and SHA-256 hashes for the executables. The GUI executable has Windows file-version metadata. No application functionality or local database paths have changed.
+
+This project is **not code-signed**. Version metadata is not a digital signature and does not establish publisher identity or prove safety. This packaging change may reduce some antivirus heuristics but cannot guarantee that Firefox or Defender will accept the release. If security software reports malware, do not bypass it; inspect the exact detection, review the source/build, and scan the generated binaries independently. For distribution to friends, consider trusted code signing after confirming build integrity.
+
+Extract the downloaded ZIP and keep the complete `ForeverMarketTracker` folder together. Launch `ForeverMarketTracker/ForeverMarketTracker.exe`. The optional `ForeverMarketCollector` is in its own folder.

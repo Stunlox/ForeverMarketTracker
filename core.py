@@ -30,6 +30,10 @@ def connect():
     CREATE TABLE IF NOT EXISTS watchlist (item_id INTEGER PRIMARY KEY, target_copper INTEGER);
     CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT);
     ''')
+    columns={r[1] for r in db.execute('PRAGMA table_info(prices)')}
+    for column in ('cheap10_unit_copper','cheap20_unit_copper'):
+        if column not in columns: db.execute(f'ALTER TABLE prices ADD COLUMN {column} INTEGER')
+    db.commit()
     return db
 
 def copper(value):
@@ -63,13 +67,33 @@ def weighted_median(entries):
         if running*2>=total:return price
     return 0
 
+def cheapest_fraction(entries, fraction):
+    """Quantity-weighted mean of the cheapest fraction of units, rounded to copper.
+
+    Uses a fractional final unit to avoid upward bias at tiny volumes.
+    """
+    if not 0 < fraction <= 1: raise ValueError('fraction must be between 0 and 1')
+    total=sum(q for _,q in entries)
+    if total <= 0: return 0
+    remaining=total*fraction
+    cost=0.0
+    for price,qty in sorted(entries):
+        taken=min(remaining,qty)
+        cost+=price*taken
+        remaining-=taken
+        if remaining <= 1e-9:break
+    return int(cost/(total*fraction)+0.5)
+
 def store_snapshot(db,payload,source='Blizzard API'):
     data=parse_auctions(payload)
     if not data: raise ValueError('No usable buyout auctions found; refusing to store empty snapshot')
+    columns={r[1] for r in db.execute('PRAGMA table_info(prices)')}
+    for column in ('cheap10_unit_copper','cheap20_unit_copper'):
+        if column not in columns: db.execute(f'ALTER TABLE prices ADD COLUMN {column} INTEGER')
     with db:
         cur=db.execute('INSERT INTO snapshots(captured_at,source,auction_count) VALUES (?,?,?)',(int(time.time()),source,len(payload['auctions'])))
         sid=cur.lastrowid
-        db.executemany('INSERT INTO prices VALUES (?,?,?,?,?,?)',[(sid,item,min(p for p,_ in entries),weighted_median(entries),sum(q for _,q in entries),len(entries)) for item,entries in data.items()])
+        db.executemany('INSERT INTO prices (snapshot_id,item_id,min_unit_copper,median_unit_copper,quantity,listings,cheap10_unit_copper,cheap20_unit_copper) VALUES (?,?,?,?,?,?,?,?)',[(sid,item,min(p for p,_ in entries),weighted_median(entries),sum(q for _,q in entries),len(entries),cheapest_fraction(entries,.10),cheapest_fraction(entries,.20)) for item,entries in data.items()])
         db.executemany("INSERT OR IGNORE INTO items(item_id,name,updated_at) VALUES (?, ?, ?)",[(item,f'Item #{item}',int(time.time())) for item in data])
     return len(data)
 

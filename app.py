@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBo
 from PySide6.QtCharts import QChart,QChartView,QLineSeries,QValueAxis
 from core import connect,load_settings,save_settings,store_snapshot,market_rows,history,copper,import_catalogue
 from api import AuctionClient,fetch_catalogue
+from timing_tab import MarketTimingTab
 
 STYLE='''QWidget {background:#101720;color:#e5edf6;font: 12px "Segoe UI";} QLineEdit,QComboBox,QSpinBox {background:#1d2938;border:1px solid #344456;border-radius:5px;padding:7px;} QPushButton {background:#245c72;border:0;border-radius:5px;padding:9px 14px;font-weight:600;} QPushButton:hover {background:#307f96;} QTableWidget {background:#172231;alternate-background-color:#1d2938;gridline-color:#29384a;selection-background-color:#236b75;} QHeaderView::section {background:#253548;color:#b9ccdf;padding:8px;border:0;} QTabWidget::pane {border:1px solid #344456;} QTabBar::tab {padding:11px 20px;background:#1c2a3a;} QTabBar::tab:selected {background:#28677b;}'''
 class Worker(QThread):
@@ -15,9 +16,10 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 0.5 | Alliance PvP');self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 0.6 | Alliance PvP');self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
+        self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
         self.config=QWidget();self.tabs.addTab(self.config,'API & Settings');self.setup_config()
         self.statusBar().showMessage('Local database ready. API not yet validated.')
         self.timer=QTimer(self);self.timer.timeout.connect(self.tick);self.timer.start(60000)
@@ -107,6 +109,7 @@ class Main(QMainWindow):
             for j,val in enumerate([name,cat+((' / '+sub) if sub else ''),copper(current),copper(median),f'{discount:+.1f}%',str(qty),str(listings),str(observations)]):
                 cell=QTableWidgetItem(val);cell.setData(Qt.ItemDataRole.UserRole,item_id);self.table.setItem(i,j,cell)
         self.summary.setText(f'{len(rows):,} items with latest auction data | Historical comparisons use observed lowest buyouts, not completed sales')
+        self.timing.load_items()
     def show_history(self):
         selection=self.table.selectedItems()
         if not selection:return

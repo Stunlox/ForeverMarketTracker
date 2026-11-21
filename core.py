@@ -8,7 +8,7 @@ DB_PATH = APP_DIR / 'market.sqlite3'
 SETTINGS_PATH = APP_DIR / 'settings.json'
 
 def load_settings():
-    defaults = {'region':'eu','realm_id':'','namespace':'dynamic-eu','auction_url':'','foreverdb_url':'','foreverdb_key':'','client_id':'2659c616a4cc4e4e85ba016f1e0d20b6','client_secret':'','interval_minutes':60,'catalogue_days':30,'ah_cut_percent':5}
+    defaults = {'region':'eu','house_id':'','realm_id':'','namespace':'dynamic-forever-eu','auction_url':'','foreverdb_url':'','foreverdb_key':'','client_id':'2659c616a4cc4e4e85ba016f1e0d20b6','client_secret':'','interval_minutes':60,'catalogue_days':30,'ah_cut_percent':5}
     if SETTINGS_PATH.exists():
         try: defaults.update(json.loads(SETTINGS_PATH.read_text(encoding='utf8')))
         except (ValueError,OSError): pass
@@ -46,12 +46,12 @@ def parse_auctions(payload):
         item=auction.get('item') or {}
         item_id=item.get('id') if isinstance(item,dict) else auction.get('item_id')
         qty=auction.get('quantity',0)
-        if not isinstance(item_id,int) or not isinstance(qty,int) or qty<=0: continue
+        if not isinstance(item_id,int) or not isinstance(qty,(int,float)) or qty<=0: continue
         total=auction.get('buyout')
         unit=auction.get('unit_price')
         if unit is None and isinstance(total,int) and total>0: unit=(total+qty-1)//qty
-        if not isinstance(unit,int) or unit<=0: continue
-        by_item.setdefault(item_id,[]).append((unit,qty))
+        if not isinstance(unit,(int,float)) or unit<=0: continue
+        by_item.setdefault(item_id,[]).append((int(unit),int(qty)))
     return by_item
 
 def weighted_median(entries):

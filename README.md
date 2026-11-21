@@ -1,34 +1,13 @@
-# Forever Market Tracker — Alliance PvP
+# Forever Market Tracker v0.4 — WoW Forever EU Alliance PvP
 
-Windows desktop auction price history application, with SQLite history and a dark PySide6 interface.
+This version reuses the **working API endpoints from Forever Gold Companion** (`data_sources.py`): `https://oauth.battle.net/token`, `dynamic-forever-eu`, `/data/wow/ruleset/1/auctions/`, and the separate `/commodities` endpoint. ForeverDB uses the `X-API-Key` header.
 
-## Download the Windows EXE (no Python required)
+## Install
+Upload these files to your GitHub repository, replacing the existing source. Keep `.github/workflows/windows-exe.yml` at that exact path. GitHub Actions will build `ForeverMarketTracker.exe` on Windows. Download the artifact from Actions, extract and run.
 
-Go to **Actions → Build Windows executable → latest successful run → Artifacts → ForeverMarketTracker-Windows**.
-Download the ZIP, extract it, and double-click `ForeverMarketTracker.exe`.
+## Configure
+Your previously saved credentials remain in `%LOCALAPPDATA%\ForeverMarketTracker\settings.json`. In API & Settings click **Discover WoW Forever auction houses**. Confirm which returned house is **Alliance PvP**, enter its numeric ID, save, then click **Fetch Alliance PvP snapshot**. Do not assume 110 without confirming its market grouping.
 
-The executable is unsigned: Windows SmartScreen may prompt before running. Only run binaries from builds you trust.
+The collector fetches normal auctions and commodities together, then stores one combined snapshot. Collection repeats hourly while the GUI is open; background collection while closed requires scheduling the collector executable using Windows Task Scheduler.
 
-## Configure on first launch
-
-Go to **API & Settings** and enter the Blizzard Client Secret and your ForeverDB key on your own PC. The Blizzard Client ID is prefilled. The ForeverDB key is not committed into this public GitHub repository. Settings are stored under `%LOCALAPPDATA%\ForeverMarketTracker\settings.json` (unencrypted).
-
-**Important:** The live Forever Alliance PvP auction endpoint and the ForeverDB catalogue API URL are **not verified**. You must configure supported, verified endpoints before collection works. Blizzard official API credentials alone do not establish that a private-server auction house is exposed. Avoid assigning a guessed connected-realm ID. The current catalogue importer supports a single page, not yet full pagination or automatic monthly refresh.
-
-## Automatic tracking
-
-While the desktop application is open, it checks for new snapshots hourly (after successful API configuration). For collection while the GUI is closed, use Windows Task Scheduler to run the included `ForeverMarketCollector.exe` hourly; your PC must be awake and online. The collector stores data in the same local SQLite database.
-
-## Limitations
-
-Auction listings are **asking prices** and not confirmed sales. Market history starts with the first successful collection; this is an early prototype, not a verified live-trading system.
-
-## Local development
-
-```powershell
-python -m pip install -r requirements.txt
-python app.py
-python -m unittest discover -p 'test_*.py' -v
-```
-
-Built on Windows by `.github/workflows/windows-exe.yml` using PyInstaller.
+**Limitations:** This code has unit tests but has not been validated against your live API credentials. The catalogue importer is single-page and needs a confirmed ForeverDB catalogue endpoint; automatic monthly catalogue updates and exact WoW category hierarchy remain future work. Historical prices are asking prices, not sales. Credentials are stored locally in plain text and must not be committed to public GitHub.

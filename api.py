@@ -1,46 +1,71 @@
-"""Authenticated snapshot client. No unsupported private-server endpoint assumptions."""
+"""WoW Forever auction client, adapted from the working Forever Gold Companion."""
 import requests
 from urllib.parse import urlparse
 
+ROOT = 'https://eu.api.blizzard.com/data/wow/ruleset/1/auctions/'
+NAMESPACE = 'dynamic-forever-eu'
+
 class AuctionClient:
-    def __init__(self,settings):self.settings=settings
+    def __init__(self, settings):
+        self.settings = settings
+        self.session = requests.Session()
+
     def token(self):
-        region=self.settings['region'].lower()
-        if region not in ('us','eu','kr','tw'):raise ValueError('Invalid Blizzard region')
-        response=requests.post(f'https://{region}.battle.net/oauth/token',auth=(self.settings['client_id'],self.settings['client_secret']),data={'grant_type':'client_credentials'},timeout=25)
+        response = requests.post('https://oauth.battle.net/token',
+            auth=(self.settings['client_id'], self.settings['client_secret']),
+            data={'grant_type':'client_credentials'}, timeout=30)
         response.raise_for_status()
         return response.json()['access_token']
-    def endpoint(self):
-        if self.settings.get('auction_url'):return self.settings['auction_url']
-        realm=self.settings.get('realm_id','').strip()
-        if not realm.isdigit():raise ValueError('Enter verified connected realm ID or a verified auction URL')
-        region=self.settings['region'].lower()
-        return f'https://{region}.api.blizzard.com/data/wow/connected-realm/{realm}/auctions'
+
+    def authenticate(self):
+        self.session.headers['Authorization'] = 'Bearer ' + self.token()
+
+    def request(self, url):
+        parsed = urlparse(url)
+        if parsed.scheme != 'https' or parsed.hostname != 'eu.api.blizzard.com':
+            raise ValueError('Refusing to send Blizzard token to an untrusted host')
+        response = self.session.get(url, params={'namespace':NAMESPACE}, timeout=180)
+        if not response.ok:
+            raise RuntimeError(f'HTTP {response.status_code}: {response.text[:1200]}')
+        return response.json()
+
+    def discover_houses(self):
+        self.authenticate()
+        payload = self.request(ROOT)
+        houses = payload.get('auctions', [])
+        if not isinstance(houses, list):
+            raise ValueError('Auction index did not return a list')
+        return houses
+
     def fetch(self):
-        url=self.endpoint()
-        parsed=urlparse(url)
-        if parsed.scheme!='https' or not parsed.hostname:raise ValueError('Auction endpoint must be HTTPS')
-        # Credentials only ever go to the official Blizzard host.
-        official=parsed.hostname==f"{self.settings['region'].lower()}.api.blizzard.com"
-        if not official:raise ValueError('Refusing to send Blizzard credentials to a non-Blizzard endpoint')
-        headers={'Authorization':'Bearer '+self.token()}
-        response=requests.get(url,headers=headers,params={'namespace':self.settings['namespace'],'locale':'en_US'},timeout=90)
-        response.raise_for_status()
-        payload=response.json()
-        if not isinstance(payload,dict) or not isinstance(payload.get('auctions'),list):raise ValueError('Response is not a supported auction snapshot')
-        return payload
+        house = str(self.settings.get('house_id','')).strip()
+        if not house.isdigit():
+            raise ValueError('Choose a WoW Forever auction house from Discover Houses first')
+        self.authenticate()
+        base = ROOT + house
+        normal = self.request(base)
+        commodities = self.request(base + '/commodities')
+        for payload in (normal, commodities):
+            if not isinstance(payload,dict) or not isinstance(payload.get('auctions'),list):
+                raise ValueError('Unexpected auction response; no snapshot saved')
+        # Existing store_snapshot accepts combined auctions; commodity prices are per unit.
+        return {'auctions': normal['auctions'] + commodities['auctions']}
 
 def fetch_catalogue(settings):
-    url=settings.get('foreverdb_url','').strip()
-    if not url:raise ValueError('Configure a verified ForeverDB item-catalogue URL')
-    parsed=urlparse(url)
-    if parsed.scheme!='https':raise ValueError('Catalogue URL must be HTTPS')
-    headers={}
-    if settings.get('foreverdb_key'):headers['Authorization']='Bearer '+settings['foreverdb_key']
-    response=requests.get(url,headers=headers,timeout=60)
+    """Single-page catalogue import; monthly pagination is not implemented yet."""
+    url = settings.get('foreverdb_url','').strip()
+    if not url:
+        raise ValueError('Enter a verified ForeverDB catalogue endpoint')
+    parsed = urlparse(url)
+    if parsed.scheme != 'https' or parsed.hostname not in ('foreverdb.net','www.foreverdb.net'):
+        raise ValueError('Catalogue must be served from foreverdb.net over HTTPS')
+    response = requests.get(url,headers={'X-API-Key':settings.get('foreverdb_key',''),
+                                          'User-Agent':'ForeverMarketTracker/0.4 (ForeverDB credited)'},timeout=60)
     response.raise_for_status()
-    data=response.json()
+    payload = response.json()
+    data = payload.get('data',payload) if isinstance(payload,dict) else payload
     if isinstance(data,list):return data
-    for key in ('items','results','data'):
-        if isinstance(data,dict) and isinstance(data.get(key),list):return data[key]
-    raise ValueError('Unsupported catalogue response; pagination/field mapping needs configuration')
+    if isinstance(data,dict):
+        for key in ('items','results'):
+            if isinstance(data.get(key),list):return data[key]
+    raise ValueError('Unsupported ForeverDB catalogue response')

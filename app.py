@@ -15,7 +15,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None
-        self.setWindowTitle('Forever Market Tracker 0.3 | Alliance PvP');self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 0.4 | Alliance PvP');self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.config=QWidget();self.tabs.addTab(self.config,'API & Settings');self.setup_config()
@@ -35,23 +35,37 @@ class Main(QMainWindow):
         self.summary=QLabel('No market snapshots yet');lay.addWidget(self.summary)
     def setup_config(self):
         form=QFormLayout(self.config);self.fields={}
-        for key,label in [('region','Blizzard region (us/eu)'),('namespace','API namespace'),('realm_id','Connected realm ID (must verify)'),('auction_url','Verified auction URL (optional)'),('client_id','Blizzard client ID'),('client_secret','Blizzard client secret'),('foreverdb_url','ForeverDB catalogue URL'),('foreverdb_key','ForeverDB API key')]:
+        for key,label in [('house_id','Forever auction house ID (discover below)'),('client_id','Blizzard client ID'),('client_secret','Blizzard client secret'),('foreverdb_url','ForeverDB catalogue URL'),('foreverdb_key','ForeverDB API key')]:
             field=QLineEdit(str(self.settings.get(key,'')))
             if 'secret' in key or 'key' in key:field.setEchoMode(QLineEdit.EchoMode.Password)
             self.fields[key]=field;form.addRow(label,field)
         self.interval=QSpinBox();self.interval.setRange(15,1440);self.interval.setValue(int(self.settings['interval_minutes']));form.addRow('Refresh interval (minutes)',self.interval)
         self.cut=QSpinBox();self.cut.setRange(0,30);self.cut.setValue(int(self.settings['ah_cut_percent']));form.addRow('AH cut % (estimate)',self.cut)
         save=QPushButton('Save settings');save.clicked.connect(self.save);form.addRow(save)
-        validate=QPushButton('Validate Blizzard endpoint & fetch snapshot');validate.clicked.connect(self.scan);form.addRow(validate)
+        discover=QPushButton('Discover WoW Forever auction houses');discover.clicked.connect(self.discover);form.addRow(discover)
+        validate=QPushButton('Fetch Alliance PvP snapshot (auctions + commodities)');validate.clicked.connect(self.scan);form.addRow(validate)
         catalog=QPushButton('Import ForeverDB catalogue');catalog.clicked.connect(self.catalogue);form.addRow(catalog)
         form.addRow(QLabel('Credentials stay in local settings.json. This MVP does not encrypt them; protect your Windows account.'))
-        form.addRow(QLabel('The API endpoint must be verified for WoW Forever. No unverified auction IDs are assumed.'))
+        form.addRow(QLabel('Select the Alliance PvP house ID from the discovered list. No house ID is assumed.'))
         form.addRow(QLabel('ForeverDB attribution: item metadata supplied by ForeverDB where configured.'))
     def save(self):
         self.settings.update({k:v.text().strip() for k,v in self.fields.items()});self.settings['interval_minutes']=self.interval.value();self.settings['ah_cut_percent']=self.cut.value();save_settings(self.settings);self.statusBar().showMessage('Settings saved')
     def work(self,fn,on_done):
         if self.worker and self.worker.isRunning():return
         self.worker=Worker(fn);self.worker.done.connect(on_done);self.worker.failed.connect(lambda msg:QMessageBox.warning(self,'API validation / import failed',msg));self.worker.start()
+    def discover(self):
+        self.save()
+        def done(houses):
+            lines=[]
+            for h in houses:
+                if isinstance(h,dict):
+                    ident=h.get('id',h.get('auction_house_id','?'))
+                    lines.append(f'{ident}: {h.get("name",h.get("type",str(h)))}')
+                else:lines.append(str(h))
+            QMessageBox.information(self,'WoW Forever auction houses',
+                'Choose the Alliance PvP house ID from this list and enter it in settings:\n\n'+'\n'.join(lines[:80]))
+        self.work(lambda:AuctionClient(self.settings).discover_houses(),done)
+
     def scan(self):
         self.save();self.statusBar().showMessage('Validating endpoint and fetching auction snapshot...')
         def fn():
@@ -72,7 +86,7 @@ class Main(QMainWindow):
     def tick(self):
         row=self.db.execute('SELECT MAX(captured_at) FROM snapshots').fetchone()
         last=row[0] or 0
-        if time.time()-last>=self.settings['interval_minutes']*60 and self.settings.get('client_id') and self.settings.get('client_secret') and (self.settings.get('realm_id') or self.settings.get('auction_url')):
+        if time.time()-last>=self.settings['interval_minutes']*60 and self.settings.get('client_id') and self.settings.get('client_secret') and self.settings.get('house_id'):
             if time.time()-self.last_check>300:self.last_check=time.time();self.scan()
     def refresh(self,*_):
         cats=['All']+[r[0] for r in self.db.execute('SELECT DISTINCT category FROM items ORDER BY category') if r[0]]

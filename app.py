@@ -1,10 +1,10 @@
 import sys, time, traceback
 from pathlib import Path
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon,QColor
 from PySide6.QtCore import Qt,QThread,Signal
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLineEdit,QComboBox,QTableWidget,QTableWidgetItem,QLabel,QTabWidget,QFormLayout,QSpinBox,QMessageBox,QHeaderView,QAbstractItemView,QSplitter)
 from PySide6.QtCharts import QChart,QChartView,QLineSeries,QValueAxis
-from core import connect,load_settings,save_settings,store_snapshot,market_rows,history,copper,import_catalogue
+from core import connect,load_settings,save_settings,store_snapshot,market_rows,history,copper,import_catalogue,quality_for_items,QUALITY_COLORS,QUALITY_NAMES
 from api import AuctionClient,fetch_catalogue
 from timing_tab import MarketTimingTab
 from simplified_tab import SimplifiedTimingTab
@@ -25,7 +25,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 0.9.2 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.0 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
@@ -117,10 +117,14 @@ class Main(QMainWindow):
         days=int(self.period.currentText().split()[0]);rows=market_rows(self.db,self.search.text(),self.category.currentText(),days)
         rows.sort(key=lambda r:r[6],reverse=True)
         self.table.setRowCount(len(rows));self.ids=[]
+        qualities=quality_for_items(self.db,[r[0] for r in rows])
         for i,r in enumerate(rows):
             item_id,name,cat,sub,current,median,discount,qty,listings,observations=r;self.ids.append(item_id)
             for j,val in enumerate([name,cat+((' / '+sub) if sub else ''),copper(current),copper(median),f'{discount:+.1f}%',str(qty),str(listings),str(observations)]):
-                cell=QTableWidgetItem(val);cell.setData(Qt.ItemDataRole.UserRole,item_id);self.table.setItem(i,j,cell)
+                cell=QTableWidgetItem(val);cell.setData(Qt.ItemDataRole.UserRole,item_id)
+                if j==0 and qualities.get(item_id) in QUALITY_COLORS:
+                    quality=qualities[item_id];cell.setForeground(QColor(QUALITY_COLORS[quality]));cell.setToolTip(f'{QUALITY_NAMES[quality]} quality')
+                self.table.setItem(i,j,cell)
         self.summary.setText(f'{len(rows):,} items with latest auction data | Historical comparisons use observed lowest buyouts, not completed sales')
         self.timing.load_items()
         self.simplified.refresh()

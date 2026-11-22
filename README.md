@@ -61,3 +61,17 @@ Extract the downloaded ZIP and keep the complete `ForeverMarketTracker` folder t
 - Scheduler status is queried when the tab is first constructed, after enabling/disabling the task, or when **Refresh Status** is clicked. Windows subprocesses are launched with `CREATE_NO_WINDOW`.
 - Keep both release folders together. After replacing the release, disable and re-enable the hourly schedule once to ensure its task points to the current collector executable.
 - Historical snapshots are never purged by the seven-day Collector Health view.
+
+
+## v1.0 — Item rarity colours
+
+Item rarity is imported from the ForeverDB catalogue when the response includes a recognised `quality`, `itemQuality`, `item_quality` or `rarity` field. Existing database files are migrated in place; price history is not deleted. Re-import the full ForeverDB catalogue in API & Settings to populate quality. Unknown or missing quality remains uncoloured; no rarity is guessed. Market Browser item names, Market Timing trade-goods dropdown entries, and Market Timing Simplified item names use WoW quality colours. Category selection for Market Timing remains Trade Goods only; additional categories are planned for a later release.
+
+## v1.1 — Early market signals, category selection and rarity fonts
+
+- **Market Timing:** Green→yellow→red heatmap now uses each item's observed price range, including time slots with only one observation. Missing data and flat price ranges remain neutral. Cell colouring is independent of rarity-coloured item names.
+- **Market Timing & Simplified:** Choose Trade Goods (default), All categories, or a catalogue category. Category choices reflect imported item metadata. For low-volume equipment, lower the minimum current supply from its default of 100.
+- **Early deals:** Simplified rankings may show provisional signals after two distinct dates; evidence is clearly labelled Low data, Moderate, Good or High. Each deal shows snapshot/date counts in its tooltip. Early deals are discounted in ranking score.
+- **Rarity:** Existing v1.0 catalogue-backed quality colours remain active for item fonts in Market Browser, Market Timing dropdown, and Simplified ranking.
+- **Important:** These are comparisons of auction **asking prices**, not confirmed sales, forecasts or guaranteed profits. Two days can reveal a price difference, but cannot establish a reliable recurring weekday pattern.
+- Historical snapshots are retained; no destructive database migration is required.

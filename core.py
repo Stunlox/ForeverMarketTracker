@@ -33,6 +33,8 @@ def connect():
     columns={r[1] for r in db.execute('PRAGMA table_info(prices)')}
     for column in ('cheap10_unit_copper','cheap20_unit_copper'):
         if column not in columns: db.execute(f'ALTER TABLE prices ADD COLUMN {column} INTEGER')
+    item_columns={r[1] for r in db.execute('PRAGMA table_info(items)')}
+    if 'quality' not in item_columns: db.execute('ALTER TABLE items ADD COLUMN quality INTEGER')
     db.commit()
     return db
 
@@ -123,7 +125,36 @@ def _category(obj):
     if not isinstance(subclass,str):subclass=''
     return category,subclass
 
+QUALITY_NAMES = {0:'Poor',1:'Common',2:'Uncommon',3:'Rare',4:'Epic',5:'Legendary',6:'Artifact',7:'Heirloom'}
+QUALITY_COLORS = {0:'#9D9D9D',1:'#E5EDF6',2:'#1EFF00',3:'#0070DD',4:'#A335EE',5:'#FF8000',6:'#E6CC80',7:'#00CCFF'}
+
+def item_quality(obj):
+    """Parse ForeverDB quality if supplied; missing/unknown remains NULL."""
+    for key in ('quality','itemQuality','item_quality','rarity'):
+        if key not in obj: continue
+        raw=obj[key]
+        if isinstance(raw,dict): raw=raw.get('id',raw.get('value',raw.get('quality')))
+        if isinstance(raw,str) and not raw.strip().isdigit():
+            inverse={name.lower():num for num,name in QUALITY_NAMES.items()}
+            return inverse.get(raw.strip().lower())
+        number=_number_or_none(raw)
+        return number if number in QUALITY_NAMES else None
+    return None
+
+def quality_for_items(db,item_ids):
+    """Read qualities in one query; absent values intentionally have no rarity colour."""
+    ids=list(dict.fromkeys(item_ids))
+    if not ids:return {}
+    result={}
+    for start in range(0,len(ids),900):
+        batch=ids[start:start+900]
+        marks=','.join('?' for _ in batch)
+        result.update(db.execute(f'SELECT item_id,quality FROM items WHERE item_id IN ({marks})',batch).fetchall())
+    return result
+
 def import_catalogue(db,items):
+    if 'quality' not in {r[1] for r in db.execute('PRAGMA table_info(items)')}:
+        db.execute('ALTER TABLE items ADD COLUMN quality INTEGER')
     rows=[]
     now=int(time.time())
     for obj in items:
@@ -133,10 +164,10 @@ def import_catalogue(db,items):
         name=obj.get('name') or f'Item #{item_id}'
         if isinstance(name,dict):name=name.get('en_US') or name.get('enGB') or next(iter(name.values()),f'Item #{item_id}')
         category,subcategory=_category(obj)
-        rows.append((item_id,str(name),category,subcategory,now))
+        rows.append((item_id,str(name),category,subcategory,now,item_quality(obj)))
     if not rows:raise ValueError('No usable item records; catalogue refresh aborted')
     with db:
-        db.executemany("INSERT INTO items VALUES (?,?,?,?,?) ON CONFLICT(item_id) DO UPDATE SET name=excluded.name,category=excluded.category,subcategory=excluded.subcategory,updated_at=excluded.updated_at",rows)
+        db.executemany("INSERT INTO items (item_id,name,category,subcategory,updated_at,quality) VALUES (?,?,?,?,?,?) ON CONFLICT(item_id) DO UPDATE SET name=excluded.name,category=excluded.category,subcategory=excluded.subcategory,updated_at=excluded.updated_at,quality=COALESCE(excluded.quality,items.quality)",rows)
         db.execute("INSERT OR REPLACE INTO metadata VALUES ('catalogue_refreshed',?)",(str(now),))
     return len(rows)
 

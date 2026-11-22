@@ -1,32 +1,27 @@
-"""Conservative ranked trade-goods timing opportunities; no fabricated recommendations."""
+"""Rank observed category-wide timing differences with explicit confidence labels."""
 import datetime as dt
-import statistics
 from zoneinfo import ZoneInfo
-from market_timing import DAYS, trade_goods, observations, analyse
+from market_timing import DAYS,market_items,trade_goods,observations,analyse
+UK=ZoneInfo('Europe/London')
 
-UK = ZoneInfo('Europe/London')
+def slot_name(slot):return f'{DAYS[slot[0]]} {slot[1]:02d}:00'
 
-def slot_name(slot):
-    return f'{DAYS[slot[0]]} {slot[1]:02d}:00'
+def confidence_label(dates,samples,weeks):
+    if dates>=14 and samples>=6 and weeks>=3:return 'High'
+    if dates>=7 and samples>=3 and weeks>=2:return 'Good'
+    if dates>=3 and samples>=2:return 'Moderate'
+    return 'Low data'
 
-def top_deals(db, days=90, min_supply=100, cut_pct=5, limit=40,
-              min_dates=14, min_slot_samples=3, min_weeks=3):
-    """Rank repeatable observed opportunities, never infer trades from sparse data.
-
-    Price is the median across snapshots of each snapshot's cheapest 10% unit-weighted
-    average. Volume is current available quantity. Margin is an illustrative
-    difference between asking-price proxies, not a realized trading profit.
-    """
-    candidates=[]
-    checked=0
-    for item_id,name,subcategory,current_supply,current_low in trade_goods(db,min_supply):
+def top_deals(db,days=90,min_supply=100,cut_pct=5,limit=40,
+              min_dates=2,min_slot_samples=1,min_weeks=1,category='Trade Goods'):
+    """Early *provisional* price signals; snapshots are listings, not completed sales."""
+    candidates=[];checked=0
+    for item_id,name,subcategory,current_supply,current_low in (trade_goods(db,min_supply) if category=='Trade Goods' else market_items(db,category,min_supply)):
         checked+=1
         rows=[r for r in observations(db,item_id,days) if len(r)>5 and r[5] is not None and r[5]>0]
         dates={dt.datetime.fromtimestamp(r[0],UK).date() for r in rows}
         if len(dates)<min_dates:continue
         cells=analyse(rows,UK,min_samples=min_slot_samples,metric='cheap10')
-        # Require samples across different calendar weeks; several scans in one day
-        # are not sufficient to infer a recurring weekday pattern.
         weeks={}
         for r in rows:
             when=dt.datetime.fromtimestamp(r[0],UK)
@@ -37,19 +32,22 @@ def top_deals(db, days=90, min_supply=100, cut_pct=5, limit=40,
         buy_slot,buy=min(eligible,key=lambda x:x[1]['median_price'])
         sell_slot,sell=max(eligible,key=lambda x:x[1]['median_price'])
         buy_price=buy['median_price'];sell_price=sell['median_price']
-        if buy_slot==sell_slot or buy_price<=0:continue
+        if buy_slot==sell_slot or buy_price<=0 or sell_price<=buy_price:continue
         margin=(sell_price*(1-cut_pct/100)-buy_price)/buy_price*100
         if margin<=0:continue
-        spread=(sell_price-buy_price)/buy_price*100
-        # Favor supply and repeat observations, but never let volume alone outrank margin.
-        score=margin*min(1,current_supply/1000)**0.5 * min(1,min(buy['count'],sell['count'])/6)**0.5
-        confidence='Moderate' if min(buy['count'],sell['count'])>=6 and min(len(weeks[buy_slot]),len(weeks[sell_slot]))>=5 else 'Early'
+        samples=min(buy['count'],sell['count'])
+        span_weeks=min(len(weeks[buy_slot]),len(weeks[sell_slot]))
+        confidence=confidence_label(len(dates),samples,span_weeks)
+        # Low-evidence opportunities remain visible but rank below stronger signals
+        evidence_factor={'Low data':.25,'Moderate':.5,'Good':.8,'High':1.0}[confidence]
+        score=margin*min(1,current_supply/1000)**.5*evidence_factor
         candidates.append({'item_id':item_id,'name':name,'subcategory':subcategory,
             'buy_time':slot_name(buy_slot),'sell_time':slot_name(sell_slot),
             'buy_price':buy_price,'sell_price':sell_price,'margin_pct':margin,
-            'spread_pct':spread,'current_supply':current_supply,
-            'buy_samples':buy['count'],'sell_samples':sell['count'],
-            'buy_weeks':len(weeks[buy_slot]),'sell_weeks':len(weeks[sell_slot]),
-            'confidence':confidence,'score':score,'dates':len(dates)})
+            'spread_pct':(sell_price-buy_price)/buy_price*100,
+            'current_supply':current_supply,'buy_samples':buy['count'],
+            'sell_samples':sell['count'],'buy_weeks':len(weeks[buy_slot]),
+            'sell_weeks':len(weeks[sell_slot]),'confidence':confidence,
+            'score':score,'dates':len(dates),'snapshots':len(rows)})
     candidates.sort(key=lambda x:(-x['score'],-x['margin_pct'],x['name'].casefold()))
     return candidates[:limit],checked

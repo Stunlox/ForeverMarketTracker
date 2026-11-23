@@ -21,6 +21,8 @@ class CollectorHealthTab(QWidget):
         self.progress_label=QLabel('Collector idle');lay.addWidget(self.progress_label)
         self.vendor_label=QLabel('ForeverDB vendor import: not started this session');lay.addWidget(self.vendor_label)
         self.vendor_progress=QProgressBar();self.vendor_progress.setRange(0,100);self.vendor_progress.setValue(0);lay.addWidget(self.vendor_progress)
+        self.profession_label=QLabel('ForeverDB crafting recipes: not started this session');lay.addWidget(self.profession_label)
+        self.profession_progress=QProgressBar();self.profession_progress.setRange(0,100);lay.addWidget(self.profession_progress)
         self.progress=QProgressBar();self.progress.setRange(0,100);self.progress.setValue(0);lay.addWidget(self.progress)
         buttons=QHBoxLayout();lay.addLayout(buttons)
         self.manual=QPushButton('Collect Now');self.manual.clicked.connect(self.collect_requested.emit);buttons.addWidget(self.manual)
@@ -53,6 +55,19 @@ class CollectorHealthTab(QWidget):
         self.vendor_progress.setRange(0,100)
         self.vendor_progress.setValue(100 if success else 0)
         self.vendor_label.setText('ForeverDB vendor import: '+message)
+    def profession_started(self):
+        self.profession_progress.setRange(0,0)
+        self.profession_label.setText('ForeverDB crafting recipes: connecting…')
+    def profession_progress_update(self,stage,current,total):
+        if total:
+            self.profession_progress.setRange(0,100)
+            self.profession_progress.setValue(min(100,int(current*100/total)))
+        else:self.profession_progress.setRange(0,0)
+        self.profession_label.setText(f'ForeverDB recipes: {stage} — {current:,} / {total:,}' if total else f'ForeverDB recipes: {stage} — {current:,}')
+    def profession_finished(self,message,success=True):
+        self.profession_progress.setRange(0,100)
+        self.profession_progress.setValue(100 if success else 0)
+        self.profession_label.setText('ForeverDB crafting recipes: '+message)
     def set_running(self,stage):
         self.running=True;self.manual.setEnabled(False);self.progress.setRange(0,0);self.progress_label.setText(stage)
     def set_finished(self,message):

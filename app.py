@@ -15,6 +15,8 @@ from exclusions_tab import ExclusionsTab
 from exclusions import import_vendor_metadata
 from collection_service import collect_once
 from vendor_catalogue import fetch_vendors,save_inventory,vendor_classification
+from professions_data import fetch_professions,save_recipes
+from professions_tab import ProfessionsTab
 
 def resource_path(relative):
     base = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
@@ -30,7 +32,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 1.2.3a | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.2.4 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
@@ -38,6 +40,7 @@ class Main(QMainWindow):
         self.suggested=SuggestedBuysTab(self.db);self.tabs.addTab(self.suggested,'Suggested Buys')
         self.weekday=WeekdayBuysTab(self.db);self.tabs.addTab(self.weekday,'Suggested Buys (Weekday)')
         self.target=TargetItemTab(self.db);self.tabs.addTab(self.target,'Target Item')
+        self.professions=ProfessionsTab(self.db,self.settings);self.tabs.addTab(self.professions,'Professions')
         self.exclusions=ExclusionsTab(self.db);self.tabs.addTab(self.exclusions,'Manage Exclusions')
         for widget in (self.simplified,self.suggested,self.weekday,self.target):widget.exclusions_changed.connect(self.exclusion_refresh)
         self.health=CollectorHealthTab(self.db);self.tabs.addTab(self.health,'Collector Health');self.health.collect_requested.connect(self.scan)
@@ -79,6 +82,7 @@ class Main(QMainWindow):
         catalog=QPushButton('Import FULL ForeverDB catalogue (~24k items)');catalog.clicked.connect(self.catalogue);form.addRow(catalog)
         self.catalogue_status=QLabel('Catalogue not yet refreshed this session');form.addRow(self.catalogue_status)
         vendors=QPushButton('Import ForeverDB vendor inventories (separate pull)');vendors.clicked.connect(self.vendor_import);form.addRow(vendors)
+        professions=QPushButton('Import ForeverDB crafting professions (separate pull)');professions.clicked.connect(self.profession_import);form.addRow(professions)
         form.addRow(QLabel('Vendor source: ForeverDB.net — https://foreverdb.net'))
         form.addRow(QLabel('Credentials stay in local settings.json. This MVP does not encrypt them; protect your Windows account.'))
         form.addRow(QLabel('Select the Alliance PvP house ID from the discovered list. No house ID is assumed.'))
@@ -165,6 +169,25 @@ class Main(QMainWindow):
         self.worker.done.connect(done)
         self.worker.failed.connect(failed)
         self.worker.start()
+    def profession_import(self):
+        self.save()
+        if self.worker and self.worker.isRunning():
+            self.statusBar().showMessage('Another operation is already running');return
+        self.health.profession_started();self.tabs.setCurrentWidget(self.health)
+        def job():
+            rows,counts=fetch_professions(self.settings,progress=lambda stage,current,total:self.worker.progress.emit(stage,current,total))
+            db=connect()
+            try:return save_recipes(db,rows),counts
+            finally:db.close()
+        def done(result):
+            count,counts=result
+            self.health.profession_finished(f'{count:,} AH-craftable recipes imported across {len(counts)} professions')
+            self.professions.refresh();self.statusBar().showMessage('Crafting profession import completed')
+        def failed(message):
+            self.health.profession_finished('Failed — '+message,False)
+            QMessageBox.warning(self,'ForeverDB crafting import failed',message)
+        self.worker=Worker(job);self.worker.progress.connect(self.health.profession_progress_update)
+        self.worker.done.connect(done);self.worker.failed.connect(failed);self.worker.start()
     def refresh(self,*_):
         cats=['All']+[r[0] for r in self.db.execute('SELECT DISTINCT category FROM items ORDER BY category') if r[0]]
         selected=self.category.currentText();self.category.blockSignals(True);self.category.clear();self.category.addItems(cats);self.category.setCurrentText(selected if selected in cats else 'All');self.category.blockSignals(False)
@@ -192,6 +215,7 @@ class Main(QMainWindow):
         self.weekday.refresh()
         self.target.refresh()
         self.exclusions.refresh()
+        self.professions.refresh()
     def show_history(self):
         selection=self.table.selectedItems()
         if not selection:return

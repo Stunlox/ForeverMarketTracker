@@ -75,7 +75,14 @@ def parse_vendor(vendor,detail):
         if stock=='unknown' and isinstance(obj.get('stock'),dict):stock=stock_type(obj['stock'])
         source=seen_status(obj)
         if source=='unknown':source=provenance
-        rows.append((ident,vendor_id,stock,source))
+        price=None
+        for key in ('buyPrice','buy_price','purchasePrice','purchase_price','vendorPrice','vendor_price'):
+            value=obj.get(key)
+            if isinstance(value,dict):value=value.get('copper',value.get('amount'))
+            try:
+                if value is not None and int(value)>0:price=int(value);break
+            except (ValueError,TypeError):pass
+        rows.append((ident,vendor_id,stock,source,price) if price is not None else (ident,vendor_id,stock,source))
     return rows
 
 def fetch_vendors(settings,progress=None):
@@ -122,12 +129,14 @@ def migrate(db):
             stock_type TEXT NOT NULL CHECK(stock_type IN ('limited','unlimited','unknown')),
             provenance TEXT NOT NULL, PRIMARY KEY(item_id,vendor_id))""")
         db.execute('CREATE INDEX IF NOT EXISTS idx_vendor_inventory_stock ON vendor_inventory(stock_type,item_id)')
+        if 'purchase_copper' not in {r[1] for r in db.execute('PRAGMA table_info(vendor_inventory)')}:
+            db.execute('ALTER TABLE vendor_inventory ADD COLUMN purchase_copper INTEGER')
 
 def save_inventory(db,rows):
     migrate(db)
     with db:
         db.execute('DELETE FROM vendor_inventory')
-        db.executemany('INSERT OR REPLACE INTO vendor_inventory(item_id,vendor_id,stock_type,provenance) VALUES (?,?,?,?)',rows)
+        db.executemany('INSERT OR REPLACE INTO vendor_inventory(item_id,vendor_id,stock_type,provenance,purchase_copper) VALUES (?,?,?,?,?)',[tuple(r)+(None,) if len(r)==4 else tuple(r) for r in rows])
         db.execute("INSERT OR REPLACE INTO metadata VALUES ('vendor_inventory_refreshed',?)",(str(int(time.time())),))
     return len(rows)
 

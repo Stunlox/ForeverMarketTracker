@@ -7,3 +7,12 @@ Extract this ZIP and upload its contents (including `.github/workflows/windows-e
 
 ## Verification
 Run `python -m unittest discover -p 'test_*.py'`. Windows PySide6 and Task Scheduler behaviour must be tested on Windows.
+
+## v1.2.4 — Professions crafting profits
+
+- New **Professions** tab: choose one of eight crafting professions, view per-craft AH proceeds, reagent costs, net profit after AH cut, ROI, and current output supply; double-click for material breakdown.
+- New **Import ForeverDB crafting professions** button in **API & Settings**, with a dedicated progress indicator in **Collector Health**. Existing market history and previous recipe imports are preserved if an import fails.
+- Import excludes gathering professions, and excludes recipes without identifiable AH-saleable outputs or reagent IDs. Missing prices are not assumed zero.
+- Explicit NPC **purchase** prices can be stored from vendor inventory responses (recognized keys: `buyPrice`, `purchasePrice`, `vendorPrice` and snake-case equivalents). **Re-import vendor inventories** to populate this field when the API supplies it. The old vendor table has no purchase price, and an item's NPC sell value is not an NPC purchase price.
+- Profit is an estimate based on latest available AH **median asking prices**, not a verified executable order book or actual completed sales. Crafting cooldowns, deposits, AH supply depth, recipe acquisition, binding restrictions, and proc yields are not fully modeled.
+- ForeverDB API recipe shape has **not been verified live** in this environment. If the API uses different field names, the importer may report no usable recipes rather than import bad data. No live import or Windows build was performed here.

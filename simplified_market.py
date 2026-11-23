@@ -33,7 +33,7 @@ def temporary_spike_indices(rows, ratio=2.5):
 
 def top_deals(db,days=90,min_supply=100,cut_pct=5,limit=40,
               min_dates=2,min_slot_samples=1,min_weeks=1,category='Trade Goods',
-              min_profit_gold=0,exclude_spikes=True):
+              min_profit_gold=0,exclude_spikes=True,include_unlimited=False,include_limited=False):
     """Early *provisional* price signals; snapshots are listings, not completed sales."""
     candidates=[];checked=0
     for item_id,name,subcategory,current_supply,current_low in (trade_goods(db,min_supply) if category=='Trade Goods' else market_items(db,category,min_supply)):
@@ -73,7 +73,7 @@ def top_deals(db,days=90,min_supply=100,cut_pct=5,limit=40,
             'sell_weeks':len(weeks[sell_slot]),'confidence':confidence,
             'score':score,'dates':len(dates),'snapshots':len(rows)})
     from exclusions import excluded_ids
-    blocked=excluded_ids(db)
+    blocked=excluded_ids(db,include_unlimited=include_unlimited,include_limited=include_limited)
     candidates=[c for c in candidates if c['item_id'] not in blocked]
     candidates.sort(key=lambda x:(-x['score'],-x['margin_pct'],x['name'].casefold()))
     return candidates[:max(1,min(300,int(limit)))],checked

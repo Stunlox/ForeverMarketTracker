@@ -19,6 +19,8 @@ class CollectorHealthTab(QWidget):
         self.database=QLabel('Historical database: retained indefinitely');lay.addWidget(self.database)
         self.backups=QLabel('Backups: —');lay.addWidget(self.backups)
         self.progress_label=QLabel('Collector idle');lay.addWidget(self.progress_label)
+        self.vendor_label=QLabel('ForeverDB vendor import: not started this session');lay.addWidget(self.vendor_label)
+        self.vendor_progress=QProgressBar();self.vendor_progress.setRange(0,100);self.vendor_progress.setValue(0);lay.addWidget(self.vendor_progress)
         self.progress=QProgressBar();self.progress.setRange(0,100);self.progress.setValue(0);lay.addWidget(self.progress)
         buttons=QHBoxLayout();lay.addLayout(buttons)
         self.manual=QPushButton('Collect Now');self.manual.clicked.connect(self.collect_requested.emit);buttons.addWidget(self.manual)
@@ -38,6 +40,19 @@ class CollectorHealthTab(QWidget):
         self.refresh()
         successes=[e for e in recent_events() if e.get('status')=='success']
         self._last_success=self.db.execute('SELECT MAX(id) FROM snapshots').fetchone()[0]
+    def vendor_started(self):
+        self.vendor_progress.setRange(0,0)
+        self.vendor_label.setText('ForeverDB vendor import: connecting…')
+    def vendor_progress_update(self,stage,current,total):
+        if total:
+            self.vendor_progress.setRange(0,100)
+            self.vendor_progress.setValue(min(100,int(100*current/total)))
+        else:self.vendor_progress.setRange(0,0)
+        self.vendor_label.setText(f'ForeverDB: {stage} — {current:,} / {total:,}' if total else f'ForeverDB: {stage} — {current:,}')
+    def vendor_finished(self,message,success=True):
+        self.vendor_progress.setRange(0,100)
+        self.vendor_progress.setValue(100 if success else 0)
+        self.vendor_label.setText('ForeverDB vendor import: '+message)
     def set_running(self,stage):
         self.running=True;self.manual.setEnabled(False);self.progress.setRange(0,0);self.progress_label.setText(stage)
     def set_finished(self,message):

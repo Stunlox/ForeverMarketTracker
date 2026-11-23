@@ -11,11 +11,18 @@ def exclude(db,item_id,reason='Manual'):
 def restore(db,item_id):
     with db: db.execute('DELETE FROM item_exclusions WHERE item_id=?',(int(item_id),))
 
-def excluded_ids(db,include_vendor=True):
+def excluded_ids(db,include_vendor=True,include_unlimited=False,include_limited=False):
     if db is None:return set()
     migrate(db)
     result={r[0] for r in db.execute('SELECT item_id FROM item_exclusions')}
     if include_vendor:result.update(r[0] for r in db.execute('SELECT item_id FROM vendor_items'))
+    from vendor_catalogue import migrate as migrate_vendor
+    migrate_vendor(db)
+    # Default: omit confirmed vendor items, but do not silently omit unknown stock.
+    if not include_unlimited:
+        result.update(r[0] for r in db.execute("SELECT item_id FROM vendor_inventory WHERE stock_type='unlimited'"))
+    if not include_limited:
+        result.update(r[0] for r in db.execute("SELECT item_id FROM vendor_inventory WHERE stock_type='limited'"))
     return result
 
 def vendor_source(obj):

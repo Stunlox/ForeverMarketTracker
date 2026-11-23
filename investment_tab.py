@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt,Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,
-    QDoubleSpinBox,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QLineEdit,QMenu)
+    QDoubleSpinBox,QCheckBox,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QLineEdit,QMenu)
 from core import copper,QUALITY_COLORS
 from investment import candidates,estimate,allocate
 from timing_advice import timing_for_items
@@ -20,6 +20,10 @@ class BaseInvestmentTab(QWidget):
         for (cat,) in db.execute("SELECT DISTINCT category FROM items WHERE category IS NOT NULL AND category<>'' ORDER BY category"):
             if cat.lower() not in ('trade goods','tradegoods'):self.category.addItem(cat)
         row.addWidget(self.category)
+        self.include_unlimited=QCheckBox('Include unlimited vendor items');row.addWidget(self.include_unlimited)
+        self.include_limited=QCheckBox('Include limited-stock vendor items');row.addWidget(self.include_limited)
+        self.include_unlimited.toggled.connect(self.refresh)
+        self.include_limited.toggled.connect(self.refresh)
         row.addWidget(QLabel('History'))
         self.days=QComboBox();self.days.addItems(['7','14','30','90']);self.days.setCurrentText('30');row.addWidget(self.days)
         row.addWidget(QLabel('AH cut %'))
@@ -30,7 +34,7 @@ class BaseInvestmentTab(QWidget):
         self.days.currentIndexChanged.connect(self.refresh)
         self.cut.valueChanged.connect(self.refresh)
         self.summary=QLabel();self.summary.setWordWrap(True);self.layout.addWidget(self.summary)
-    def options(self):return {'days':int(self.days.currentText()),'category':self.category.currentText(),'cut_pct':self.cut.value()}
+    def options(self):return {'days':int(self.days.currentText()),'category':self.category.currentText(),'cut_pct':self.cut.value(),'include_unlimited':self.include_unlimited.isChecked(),'include_limited':self.include_limited.isChecked()}
     def budget_copper(self):return int(round(self.budget.value()*10000))
     def create_table(self,headings):
         table=QTableWidget(0,len(headings));table.setHorizontalHeaderLabels(headings)

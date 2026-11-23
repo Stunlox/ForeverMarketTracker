@@ -13,6 +13,7 @@ from investment_tab import SuggestedBuysTab,TargetItemTab
 from exclusions_tab import ExclusionsTab
 from exclusions import import_vendor_metadata
 from collection_service import collect_once
+from vendor_catalogue import fetch_vendors,save_inventory,vendor_classification
 
 def resource_path(relative):
     base = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
@@ -20,7 +21,7 @@ def resource_path(relative):
 
 STYLE='''QWidget {background:#101720;color:#e5edf6;font: 12px "Segoe UI";} QLineEdit,QComboBox,QSpinBox {background:#1d2938;border:1px solid #344456;border-radius:5px;padding:7px;} QPushButton {background:#245c72;border:0;border-radius:5px;padding:9px 14px;font-weight:600;} QPushButton:hover {background:#307f96;} QTableWidget {background:#172231;alternate-background-color:#1d2938;gridline-color:#29384a;selection-background-color:#236b75;} QHeaderView::section {background:#253548;color:#b9ccdf;padding:8px;border:0;} QTabWidget::pane {border:1px solid #344456;} QTabBar::tab {padding:11px 20px;background:#1c2a3a;} QTabBar::tab:selected {background:#28677b;}'''
 class Worker(QThread):
-    done=Signal(object); failed=Signal(str)
+    done=Signal(object); failed=Signal(str); progress=Signal(str,int,int)
     def __init__(self,fn):super().__init__();self.fn=fn
     def run(self):
         try:self.done.emit(self.fn())
@@ -28,7 +29,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 1.2.1 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.2.2 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
@@ -71,6 +72,8 @@ class Main(QMainWindow):
         validate=QPushButton('Fetch Alliance PvP snapshot (auctions + commodities)');validate.clicked.connect(self.scan);form.addRow(validate)
         catalog=QPushButton('Import FULL ForeverDB catalogue (~24k items)');catalog.clicked.connect(self.catalogue);form.addRow(catalog)
         self.catalogue_status=QLabel('Catalogue not yet refreshed this session');form.addRow(self.catalogue_status)
+        vendors=QPushButton('Import ForeverDB vendor inventories (separate pull)');vendors.clicked.connect(self.vendor_import);form.addRow(vendors)
+        form.addRow(QLabel('Vendor source: ForeverDB.net — https://foreverdb.net'))
         form.addRow(QLabel('Credentials stay in local settings.json. This MVP does not encrypt them; protect your Windows account.'))
         form.addRow(QLabel('Select the Alliance PvP house ID from the discovered list. No house ID is assumed.'))
         form.addRow(QLabel('Item metadata: ForeverDB.net — https://foreverdb.net (credit required).'))
@@ -127,6 +130,35 @@ class Main(QMainWindow):
             self.statusBar().showMessage(f'Imported {count:,} item records from ForeverDB')
             self.refresh()
         self.work(fn,done)
+    def vendor_import(self):
+        self.save()
+        if self.worker and self.worker.isRunning():
+            self.statusBar().showMessage('Another operation is already running')
+            return
+        self.health.vendor_started()
+        self.tabs.setCurrentWidget(self.health)
+        def job():
+            rows,number=fetch_vendors(self.settings,progress=lambda stage,current,total:self.worker.progress.emit(stage,current,total))
+            db=connect()
+            try:
+                count=save_inventory(db,rows)
+                classifications=dict(vendor_classification(db))
+                return count,number,classifications
+            finally:db.close()
+        def done(result):
+            count,number,types=result
+            self.health.vendor_finished(f'{number:,} vendors / {count:,} inventory rows. '
+                f"Unlimited: {types.get('unlimited',0):,}, limited: {types.get('limited',0):,}, unknown: {types.get('unknown',0):,} unique items")
+            self.statusBar().showMessage('ForeverDB vendor inventory imported successfully')
+            self.refresh()
+        def failed(message):
+            self.health.vendor_finished('Failed — '+message,False)
+            QMessageBox.warning(self,'ForeverDB vendor import failed',message)
+        self.worker=Worker(job)
+        self.worker.progress.connect(self.health.vendor_progress_update)
+        self.worker.done.connect(done)
+        self.worker.failed.connect(failed)
+        self.worker.start()
     def refresh(self,*_):
         cats=['All']+[r[0] for r in self.db.execute('SELECT DISTINCT category FROM items ORDER BY category') if r[0]]
         selected=self.category.currentText();self.category.blockSignals(True);self.category.clear();self.category.addItems(cats);self.category.setCurrentText(selected if selected in cats else 'All');self.category.blockSignals(False)

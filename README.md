@@ -1,107 +1,19 @@
-# Forever Market Tracker v1.2.1 — Timing & Exclusions
+# Forever Market Tracker v1.2.2 — Vendor Inventory Import
 
-- Suggested Buys and Target Item now display historical weekday/hour buy and sell slots in UK local time. These are estimates from auction asking prices, not future guarantees.
-- Right-click an item in either investment tab or Market Timing Simplified to exclude it; choose vendor (manual) for known vendor items.
-- Manage Exclusions tab lists excluded items and restores manually excluded items.
-- Verified vendor-only flags are imported only if explicitly provided by ForeverDB (`vendorOnly` or `vendor_only` true). There is no reliable vendor classification otherwise; do not infer vendor status from name.
-- Exclusions persist in the existing SQLite database and do not remove market history. Market Browser still shows all items.
-- No completed-sales estimates added.
+Includes v1.2.1 features and a separate ForeverDB vendor inventory import.
 
-# Forever Market Tracker v1.2
+1. Extract and upload **all files** to GitHub, including `.github/workflows/windows-exe.yml`.
+2. Build via GitHub Actions and extract both Windows application folders together.
+3. Enter/save your ForeverDB API key in API & Settings.
+4. Click **Import ForeverDB vendor inventories (separate pull)**. It does NOT require re-downloading the full item catalogue or Blizzard auctions.
+5. Watch **Collector Health** for stage, progress, and final counts.
+6. Suggested Buys, Target Item and Market Timing Simplified have independent Include unlimited/limited vendor checkboxes (both off by default).
+7. Manage Exclusions shows imported vendor inventory and manual exclusions.
 
-## What's new
+**Important:** ForeverDB documents vendor inventory endpoints, but does not publish a complete example JSON schema. The importer only classifies limited/unlimited stock where an explicit field is present; otherwise stock is **unknown**, which remains visible by default. Do not infer stock from NPC buy/sell prices. Vendor imports are atomic: a failed pull does not delete previous vendor data. Manual exclusions always override checkbox choices. Vendor status may originate from Classic reference data, not necessarily verified in Forever.
 
-- **Market Timing Simplified:** up to 300 ranked deals (25, 50, 100, 200, 300), default 100; optional minimum net profit per unit; isolated price spikes that immediately revert are excluded by default. The detector requires neighboring observations and does not claim to detect all manipulation.
-- **Suggested Buys:** enter a total gold budget; the app proposes multiple purchases from the current AH snapshot and recent price history, with no more than 35% of your budget in one item. Spending is shared across rows, not repeated for each.
-- **Target Item:** search by item name, choose category and budget, and see estimated affordable quantity, spend and net resale profit. Items with negative projected returns remain visible.
-- **Automatic refresh:** after a successful scheduled collection, the event-log file watcher triggers a refresh of Market Browser, Market Timing, Simplified and both investment screens. This does not request another Blizzard API pull.
-- **Silent collector:** Windows release now packages the scheduled collector with `--windowed`, avoiding a black console window.
-- **Version labels:** app title and Windows executable metadata updated to 1.2.
+**API limits:** Free ForeverDB tier 5,000 calls/day, 30/min. Vendor detail requests can take several minutes. Each successful inventory import uses approximately one request per vendor plus pagination.
 
-## IMPORTANT: purchase estimates, not executable quotes
+**Verification:** Unit tests exercise classification and exclusion logic. Live authenticated vendor JSON and compiled Windows build still require user testing.
 
-The current snapshot database stores **aggregated** cheapest 10%-of-units prices, not individual auction tiers. Therefore Suggested Buys and Target Item cannot yet calculate an exact shopping basket or guarantee that all quantities can be purchased at the quoted unit price. Both screens conservatively cap quantities at roughly 10% of observed supply and use the historical median of cleaned cheapest-10% asking prices as a resale reference. These are not completed sales or guaranteed profits. Check the live Auction House before purchasing. Deposits, failed sales, listing changes and price slippage are excluded. More accurate order-book depth requires a future schema update.
-
-## Installation
-
-Upload all source files, including `.github/workflows/windows-exe.yml`, to the existing GitHub repository. Commit to `main`, wait for the Windows build, and download the `ForeverMarketTracker-Windows-v1.2-Portable` artifact. Extract both `ForeverMarketTracker` and `ForeverMarketCollector` folders together. Run `ForeverMarketTracker.exe`. Existing settings and SQLite history remain in `%LOCALAPPDATA%\ForeverMarketTracker`.
-
-If the hourly Task Scheduler task points to an old extracted release, disable and re-enable the schedule from Collector Health after extracting v1.2.
-
-## Testing
-
-Run `python -m unittest discover -p "test_*.py" -v`. The Python unit tests do not substitute for running the compiled PySide6 interface or Windows Task Scheduler.
-
-## Update
-Upload the extracted files (including `.github/workflows/windows-exe.yml`) to the same GitHub repository, replacing existing files. GitHub Actions builds the standalone Windows EXE. Close v0.4 before launching v0.5. Keep your existing local database in `%USERPROFILE%\AppData\Local\ForeverMarketTracker`.
-
-In **API & Settings**, keep the existing credentials, enter `https://foreverdb.net/api/v1/items` (or leave URL blank), then click **Import FULL ForeverDB catalogue**. The import should retrieve about 23,805 item records (the count changes as ForeverDB updates). This is metadata only: auction snapshots still come from the Blizzard Forever endpoint hourly while the GUI is open.
-
-The importer is manual in v0.5; monthly auto-refresh is not yet implemented. No credentials are embedded in this public source ZIP. Never upload your local settings.json.
-
-ForeverDB item metadata credit: https://foreverdb.net. Their API terms require visible credit and prohibit distributing API keys in applications.
-
-## v0.6 Market Timing tab
-
-New **Market Timing** tab restricts the analysis to Trade Goods from the latest snapshot and lets you select a minimum current supply (default 100 units) and 30–365 day lookback. The 7-by-24 heatmap displays historical median unit listing prices, available quantity and observation count for each weekday/hour in **UK local time** (including daylight saving). Grey cells have fewer than three samples. A preliminary cheapest-versus-highest hourly comparison is only shown after 14 distinct days of snapshots and at least three observations in each compared cell. It is descriptive, not proof of a recurring market opportunity. Values represent *asking prices*, not executed sales; an estimated 5% AH fee is applied to the illustrative spread, without deposits or unsold inventory costs.
-
-No new API calls are made for this tab. Hourly snapshots must continue collecting for patterns to emerge. All existing SQLite history and credentials remain in the same local folder.
-
-## v0.7 Cheapest 10% price tracking
-
-The Market Timing tab now defaults to **Cheapest 10% average**, with selectable Cheapest 20%, Lowest Buyout, and All-units Median. Each snapshot calculates a quantity-weighted average of the cheapest 10% or 20% of **units** on offer, rather than the cheapest fraction of auction listings. Each heatmap cell displays the median of this selected metric across the snapshots for that weekday/hour. Existing snapshots are preserved, but their cheapest-10%/20% values are unavailable and cannot be reconstructed; new metric history starts with the first v0.7 snapshot. Switching back to Lowest Buyout or All-units Median still displays legacy history. The historical price metric is an observed asking price, not an executed sale or guaranteed resale profit.
-
-Upload all files to your existing GitHub repository, replacing prior versions, then download the GitHub Actions build artifact. Keep `%LOCALAPPDATA%\ForeverMarketTracker\market.sqlite3` intact. The hourly collector also uses the upgraded snapshot function.
-
-## v0.8 — Market Timing Simplified
-
-The new **Market Timing Simplified** tab ranks up to 40 trade goods by historical buy/sell time-slot differences, using the **quantity-weighted cheapest 10% average** captured in v0.7+ hourly snapshots. Columns show typical buy and sell prices, UK-local day/hour windows, estimated margin after configurable AH cut, current supply, sample counts and confidence.
-
-To avoid false signals, the ranking requires at least 14 distinct dates, three snapshots in each compared hour, and observations in at least three distinct calendar weeks for both windows. It only includes trade goods meeting the minimum current supply, and suppresses nonpositive estimated margins. The tab will remain empty until sufficient history is collected. A historical asking-price spread does **not** prove actual sales or realizable profit. No existing SQLite database or settings need to be replaced.
-
-## v0.8.1 — Windows portable distribution (packaging-only update)
-
-The GitHub Actions build now uses PyInstaller `--onedir` for both the GUI and optional collector rather than self-extracting `--onefile` executables. The build produces a portable ZIP containing two application folders, a usage README, and SHA-256 hashes for the executables. The GUI executable has Windows file-version metadata. No application functionality or local database paths have changed.
-
-This project is **not code-signed**. Version metadata is not a digital signature and does not establish publisher identity or prove safety. This packaging change may reduce some antivirus heuristics but cannot guarantee that Firefox or Defender will accept the release. If security software reports malware, do not bypass it; inspect the exact detection, review the source/build, and scan the generated binaries independently. For distribution to friends, consider trusted code signing after confirming build integrity.
-
-Extract the downloaded ZIP and keep the complete `ForeverMarketTracker` folder together. Launch `ForeverMarketTracker/ForeverMarketTracker.exe`. The optional `ForeverMarketCollector` is in its own folder.
-
-
-## v0.8.2 icon and historical retention
-- Includes a branded ICO and PNG in `assets/`, embedded in the executable and displayed in the window/taskbar.
-- Historical auction snapshots remain in the persistent SQLite database. A seven-day Collector Health display (planned for v0.9) will only filter the UI, not purge stored market data.
-- Backup retention and log retention are separate from auction history; the v0.9 collector is not implemented in this icon-only update.
-
-
-## v0.9 Collector Health
-- Open **Collector Health** to see next scheduled Blizzard pull, last successful pull, collector progress and recent results.
-- Click **Enable Hourly Schedule** after extracting the full portable ZIP to a permanent location. This creates a current-user Windows Task Scheduler task that runs the sibling `ForeverMarketCollector.exe` every hour, at five minutes past the hour. Windows must be on and user scheduling must be permitted.
-- **Collect Now** runs immediately and displays an indeterminate progress bar while the download and database save are in progress. The bar indicates activity, not an exact percentage.
-- The scheduled task continues even if the GUI is closed. Do not move the extracted application folders without disabling and re-enabling the task.
-- Collection uses a shared interprocess lock, and logs attempts to `%LOCALAPPDATA%/ForeverMarketTracker/collector_events.jsonl`.
-- Daily SQLite-consistent backups are saved to `%LOCALAPPDATA%/ForeverMarketTracker/backups` (14 daily copies). **All historical market snapshots are kept indefinitely**; only the collector health view shows the last 7 days.
-- API pull times are shown from Windows Task Scheduler; if no task is installed, the screen says Not scheduled.
-
-
-## v0.9.2 schedule and UI behaviour
-
-- Blizzard API calls occur only from the Windows hourly scheduled collector at **HH:05**, or when **Collect Now** is clicked. The main GUI has no background API polling timer.
-- The Collector Health page reads local log/database events and receives filesystem change notifications. It does not poll `schtasks` every 30 seconds.
-- Scheduler status is queried when the tab is first constructed, after enabling/disabling the task, or when **Refresh Status** is clicked. Windows subprocesses are launched with `CREATE_NO_WINDOW`.
-- Keep both release folders together. After replacing the release, disable and re-enable the hourly schedule once to ensure its task points to the current collector executable.
-- Historical snapshots are never purged by the seven-day Collector Health view.
-
-
-## v1.0 — Item rarity colours
-
-Item rarity is imported from the ForeverDB catalogue when the response includes a recognised `quality`, `itemQuality`, `item_quality` or `rarity` field. Existing database files are migrated in place; price history is not deleted. Re-import the full ForeverDB catalogue in API & Settings to populate quality. Unknown or missing quality remains uncoloured; no rarity is guessed. Market Browser item names, Market Timing trade-goods dropdown entries, and Market Timing Simplified item names use WoW quality colours. Category selection for Market Timing remains Trade Goods only; additional categories are planned for a later release.
-
-## v1.1 — Early market signals, category selection and rarity fonts
-
-- **Market Timing:** Green→yellow→red heatmap now uses each item's observed price range, including time slots with only one observation. Missing data and flat price ranges remain neutral. Cell colouring is independent of rarity-coloured item names.
-- **Market Timing & Simplified:** Choose Trade Goods (default), All categories, or a catalogue category. Category choices reflect imported item metadata. For low-volume equipment, lower the minimum current supply from its default of 100.
-- **Early deals:** Simplified rankings may show provisional signals after two distinct dates; evidence is clearly labelled Low data, Moderate, Good or High. Each deal shows snapshot/date counts in its tooltip. Early deals are discounted in ranking score.
-- **Rarity:** Existing v1.0 catalogue-backed quality colours remain active for item fonts in Market Browser, Market Timing dropdown, and Simplified ranking.
-- **Important:** These are comparisons of auction **asking prices**, not confirmed sales, forecasts or guaranteed profits. Two days can reveal a price difference, but cannot establish a reliable recurring weekday pattern.
-- Historical snapshots are retained; no destructive database migration is required.
+Credit: https://foreverdb.net

@@ -28,6 +28,8 @@ class SimplifiedTimingTab(QWidget):
         self.limit=QComboBox();self.limit.addItems(['25','50','100','200','300']);self.limit.setCurrentText('100');controls.addWidget(self.limit)
         controls.addWidget(QLabel('Min profit / unit (g)'))
         self.min_profit=QDoubleSpinBox();self.min_profit.setRange(0,100000);self.min_profit.setDecimals(1);controls.addWidget(self.min_profit)
+        self.include_unlimited=QCheckBox('Include unlimited vendor items');controls.addWidget(self.include_unlimited)
+        self.include_limited=QCheckBox('Include limited-stock vendor items');controls.addWidget(self.include_limited)
         self.spikes=QCheckBox('Exclude temporary spikes');self.spikes.setChecked(True);controls.addWidget(self.spikes)
         reload=QPushButton('Find deals');reload.clicked.connect(self.refresh);controls.addWidget(reload)
         controls.addStretch()
@@ -56,6 +58,8 @@ class SimplifiedTimingTab(QWidget):
         self.limit.currentIndexChanged.connect(self.refresh)
         self.min_profit.valueChanged.connect(self.refresh)
         self.spikes.toggled.connect(self.refresh)
+        self.include_unlimited.toggled.connect(self.refresh)
+        self.include_limited.toggled.connect(self.refresh)
         self.refresh()
 
     def exclude_menu(self,pos):
@@ -72,7 +76,7 @@ class SimplifiedTimingTab(QWidget):
             exclude(self.db,ident,'Vendor (manual)' if selected==vendor else 'Manual');self.exclusions_changed.emit()
     def refresh(self,*_):
         days=int(self.days.currentText().split()[0])
-        deals,checked=top_deals(self.db,days=days,min_supply=self.supply.value(),cut_pct=self.cut.value(),category=self.category.currentText(),limit=int(self.limit.currentText()),min_profit_gold=self.min_profit.value(),exclude_spikes=self.spikes.isChecked())
+        deals,checked=top_deals(self.db,days=days,min_supply=self.supply.value(),cut_pct=self.cut.value(),category=self.category.currentText(),limit=int(self.limit.currentText()),min_profit_gold=self.min_profit.value(),exclude_spikes=self.spikes.isChecked(),include_unlimited=self.include_unlimited.isChecked(),include_limited=self.include_limited.isChecked())
         self.table.setRowCount(len(deals))
         qualities=quality_for_items(self.db,[d['item_id'] for d in deals])
         for i,d in enumerate(deals):

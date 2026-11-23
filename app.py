@@ -29,7 +29,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 1.2.2 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.2.3 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
@@ -53,6 +53,9 @@ class Main(QMainWindow):
         self.search=QLineEdit();self.search.setPlaceholderText('Search item names...');self.search.textChanged.connect(self.refresh);top.addWidget(self.search)
         self.category=QComboBox();self.category.currentTextChanged.connect(self.refresh);top.addWidget(self.category)
         self.period=QComboBox();self.period.addItems(['7 days','30 days','90 days','365 days']);self.period.setCurrentText('30 days');self.period.currentTextChanged.connect(self.refresh);top.addWidget(self.period)
+        top.addWidget(QLabel('Min AH qty'))
+        self.market_min_quantity=QSpinBox();self.market_min_quantity.setRange(0,100000000);self.market_min_quantity.setValue(100);self.market_min_quantity.setSingleStep(100);self.market_min_quantity.valueChanged.connect(self.refresh);top.addWidget(self.market_min_quantity)
+        self.market_quantity_mode=QComboBox();self.market_quantity_mode.addItems(['Latest snapshot','Historical average']);self.market_quantity_mode.currentIndexChanged.connect(self.refresh);top.addWidget(self.market_quantity_mode)
         scan=QPushButton('Fetch snapshot');scan.clicked.connect(self.scan);top.addWidget(scan)
         splitter=QSplitter(Qt.Orientation.Vertical);lay.addWidget(splitter)
         self.table=QTableWidget(0,8);self.table.setHorizontalHeaderLabels(['Item','Category','Current','30d median','Below median','Quantity','Listings','Observations']);self.table.horizontalHeader().setSectionResizeMode(0,QHeaderView.ResizeMode.Stretch);self.table.setAlternatingRowColors(True);self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows);self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers);self.table.itemSelectionChanged.connect(self.show_history);splitter.addWidget(self.table)
@@ -163,6 +166,12 @@ class Main(QMainWindow):
         cats=['All']+[r[0] for r in self.db.execute('SELECT DISTINCT category FROM items ORDER BY category') if r[0]]
         selected=self.category.currentText();self.category.blockSignals(True);self.category.clear();self.category.addItems(cats);self.category.setCurrentText(selected if selected in cats else 'All');self.category.blockSignals(False)
         days=int(self.period.currentText().split()[0]);rows=market_rows(self.db,self.search.text(),self.category.currentText(),days)
+        from supply_filter import average_quantities
+        min_qty=self.market_min_quantity.value()
+        if self.market_quantity_mode.currentText()=='Historical average':
+            avgs=average_quantities(self.db,[r[0] for r in rows],days)
+            rows=[r for r in rows if avgs.get(r[0],0)>=min_qty]
+        else:rows=[r for r in rows if r[7]>=min_qty]
         rows.sort(key=lambda r:r[6],reverse=True)
         self.table.setRowCount(len(rows));self.ids=[]
         qualities=quality_for_items(self.db,[r[0] for r in rows])
@@ -173,7 +182,7 @@ class Main(QMainWindow):
                 if j==0 and qualities.get(item_id) in QUALITY_COLORS:
                     quality=qualities[item_id];cell.setForeground(QColor(QUALITY_COLORS[quality]));cell.setToolTip(f'{QUALITY_NAMES[quality]} quality')
                 self.table.setItem(i,j,cell)
-        self.summary.setText(f'{len(rows):,} items with latest auction data | Historical comparisons use observed lowest buyouts, not completed sales')
+        self.summary.setText(f'{len(rows):,} items meeting minimum AH quantity ({self.market_quantity_mode.currentText().lower()}) | Historical comparisons use observed lowest buyouts, not completed sales')
         self.timing.load_items()
         self.simplified.refresh()
         self.suggested.refresh()

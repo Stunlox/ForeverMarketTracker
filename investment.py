@@ -17,7 +17,7 @@ def estimate(budget_copper,buy_price,sell_price,supply,cut_pct=5):
     return {'quantity':qty,'cost':cost,'net_proceeds':proceeds,'profit':proceeds-cost,
             'remaining':int(budget_copper)-cost}
 
-def candidates(db,days=30,category='Trade Goods',min_supply=1,cut_pct=5,limit=300,include_all=False,search='',include_unlimited=False,include_limited=False):
+def candidates(db,days=30,category='Trade Goods',min_supply=1,cut_pct=5,limit=300,include_all=False,search='',include_unlimited=False,include_limited=False,min_quantity=100,quantity_mode='Latest snapshot'):
     """Find latest snapshot items, using robust historical resale reference.
 
     Exclude one-off spikes and use the median of cleaned observations, not
@@ -67,6 +67,8 @@ def candidates(db,days=30,category='Trade Goods',min_supply=1,cut_pct=5,limit=30
     from exclusions import excluded_ids
     blocked=excluded_ids(db,include_unlimited=include_unlimited,include_limited=include_limited)
     result=[r for r in result if r['item_id'] not in blocked]
+    from supply_filter import eligible
+    result=eligible(db,result,min_quantity,quantity_mode,days)
     result.sort(key=lambda d:(-d['net_per_unit'],-d['margin']))
     return result[:max(1,int(limit)) if include_all else max(1,min(300,int(limit))) ]
 

@@ -1,19 +1,16 @@
-# Forever Market Tracker v1.2.2 — Vendor Inventory Import
+# Forever Market Tracker v1.2.3 — Market Volume Filters
 
-Includes v1.2.1 features and a separate ForeverDB vendor inventory import.
+Includes all v1.2.2 functionality and a **minimum AH quantity** filter (default 100 units) in Market Browser, Market Timing Simplified, Suggested Buys and Target Item.
 
-1. Extract and upload **all files** to GitHub, including `.github/workflows/windows-exe.yml`.
-2. Build via GitHub Actions and extract both Windows application folders together.
-3. Enter/save your ForeverDB API key in API & Settings.
-4. Click **Import ForeverDB vendor inventories (separate pull)**. It does NOT require re-downloading the full item catalogue or Blizzard auctions.
-5. Watch **Collector Health** for stage, progress, and final counts.
-6. Suggested Buys, Target Item and Market Timing Simplified have independent Include unlimited/limited vendor checkboxes (both off by default).
-7. Manage Exclusions shows imported vendor inventory and manual exclusions.
+- Choose **Latest snapshot** or **Historical average** in each tab. Historical average uses all observations in the selected lookback window, including only snapshots where the item was listed.
+- Set minimum to **0** to disable filtering.
+- AH quantity is *listed supply*, **not sales volume**; high supply does not guarantee demand.
+- Investment planner affordability still uses its separate 10% of *latest observed supply* conservative cap, even when filtering on historical average.
+- Market Timing Simplified shows the chosen filter quantity in its AH qty column.
+- Historical auction data and vendor classifications remain untouched. No additional ForeverDB or Blizzard download is required.
 
-**Important:** ForeverDB documents vendor inventory endpoints, but does not publish a complete example JSON schema. The importer only classifies limited/unlimited stock where an explicit field is present; otherwise stock is **unknown**, which remains visible by default. Do not infer stock from NPC buy/sell prices. Vendor imports are atomic: a failed pull does not delete previous vendor data. Manual exclusions always override checkbox choices. Vendor status may originate from Classic reference data, not necessarily verified in Forever.
+## Installation
+Extract this ZIP and upload its contents (including `.github/workflows/windows-exe.yml`) to the root of your GitHub repository. Commit to main and download the `ForeverMarketTracker-Windows-v1.2.3-Portable` GitHub Actions artifact. Keep both app and collector folders together.
 
-**API limits:** Free ForeverDB tier 5,000 calls/day, 30/min. Vendor detail requests can take several minutes. Each successful inventory import uses approximately one request per vendor plus pagination.
-
-**Verification:** Unit tests exercise classification and exclusion logic. Live authenticated vendor JSON and compiled Windows build still require user testing.
-
-Credit: https://foreverdb.net
+## Verification
+Run `python -m unittest discover -p 'test_*.py'`. Windows PySide6 and Task Scheduler behaviour must be tested on Windows.

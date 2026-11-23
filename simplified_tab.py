@@ -20,8 +20,9 @@ class SimplifiedTimingTab(QWidget):
         controls.addWidget(self.category)
         controls.addWidget(QLabel('History'))
         self.days=QComboBox();self.days.addItems(['30 days','60 days','90 days','180 days','365 days']);self.days.setCurrentText('90 days');controls.addWidget(self.days)
-        controls.addWidget(QLabel('Min current supply'))
+        controls.addWidget(QLabel('Min AH qty'))
         self.supply=QSpinBox();self.supply.setRange(0,1000000);self.supply.setValue(100);self.supply.setSingleStep(100);controls.addWidget(self.supply)
+        self.quantity_mode=QComboBox();self.quantity_mode.addItems(['Latest snapshot','Historical average']);controls.addWidget(self.quantity_mode)
         controls.addWidget(QLabel('AH cut %'))
         self.cut=QSpinBox();self.cut.setRange(0,30);self.cut.setValue(5);controls.addWidget(self.cut)
         controls.addWidget(QLabel('Deals'))
@@ -36,7 +37,7 @@ class SimplifiedTimingTab(QWidget):
         self.summary=QLabel();self.summary.setWordWrap(True);layout.addWidget(self.summary)
         self.table=QTableWidget(0,10);self.table.setHorizontalHeaderLabels([
             'Rank','Item','Best time to BUY (UK)','Best time to SELL (UK)',
-            'Typical buy / unit','Typical sell / unit','Net margin %','Current supply','Buy / Sell samples','Confidence'])
+            'Typical buy / unit','Typical sell / unit','Net margin %','AH qty (filter)','Buy / Sell samples','Confidence'])
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -54,6 +55,7 @@ class SimplifiedTimingTab(QWidget):
         self.category.currentIndexChanged.connect(self.refresh)
         self.days.currentIndexChanged.connect(self.refresh)
         self.supply.valueChanged.connect(self.refresh)
+        self.quantity_mode.currentIndexChanged.connect(self.refresh)
         self.cut.valueChanged.connect(self.refresh)
         self.limit.currentIndexChanged.connect(self.refresh)
         self.min_profit.valueChanged.connect(self.refresh)
@@ -76,12 +78,12 @@ class SimplifiedTimingTab(QWidget):
             exclude(self.db,ident,'Vendor (manual)' if selected==vendor else 'Manual');self.exclusions_changed.emit()
     def refresh(self,*_):
         days=int(self.days.currentText().split()[0])
-        deals,checked=top_deals(self.db,days=days,min_supply=self.supply.value(),cut_pct=self.cut.value(),category=self.category.currentText(),limit=int(self.limit.currentText()),min_profit_gold=self.min_profit.value(),exclude_spikes=self.spikes.isChecked(),include_unlimited=self.include_unlimited.isChecked(),include_limited=self.include_limited.isChecked())
+        deals,checked=top_deals(self.db,days=days,min_supply=self.supply.value(),cut_pct=self.cut.value(),category=self.category.currentText(),limit=int(self.limit.currentText()),min_profit_gold=self.min_profit.value(),exclude_spikes=self.spikes.isChecked(),include_unlimited=self.include_unlimited.isChecked(),include_limited=self.include_limited.isChecked(),quantity_mode=self.quantity_mode.currentText())
         self.table.setRowCount(len(deals))
         qualities=quality_for_items(self.db,[d['item_id'] for d in deals])
         for i,d in enumerate(deals):
             values=[str(i+1),d['name'],d['buy_time'],d['sell_time'],copper(d['buy_price']),
-                    copper(d['sell_price']),f"{d['margin_pct']:+.1f}%",f"{d['current_supply']:,}",
+                    copper(d['sell_price']),f"{d['margin_pct']:+.1f}%",f"{d['filter_quantity']:,.0f}",
                     f"{d['buy_samples']} / {d['sell_samples']}",d['confidence']]
             for j,value in enumerate(values):
                 item=QTableWidgetItem(value)

@@ -33,10 +33,15 @@ def temporary_spike_indices(rows, ratio=2.5):
 
 def top_deals(db,days=90,min_supply=100,cut_pct=5,limit=40,
               min_dates=2,min_slot_samples=1,min_weeks=1,category='Trade Goods',
-              min_profit_gold=0,exclude_spikes=True,include_unlimited=False,include_limited=False):
+              min_profit_gold=0,exclude_spikes=True,include_unlimited=False,include_limited=False,quantity_mode='Latest snapshot'):
     """Early *provisional* price signals; snapshots are listings, not completed sales."""
     candidates=[];checked=0
-    for item_id,name,subcategory,current_supply,current_low in (trade_goods(db,min_supply) if category=='Trade Goods' else market_items(db,category,min_supply)):
+    from supply_filter import average_quantities
+    supply_rows=(trade_goods(db,0) if category=='Trade Goods' else market_items(db,category,0))
+    average=average_quantities(db,[r[0] for r in supply_rows],days) if quantity_mode=='Historical average' else {}
+    for item_id,name,subcategory,current_supply,current_low in supply_rows:
+        filter_qty=average.get(item_id,0) if quantity_mode=='Historical average' else current_supply
+        if filter_qty<min_supply:continue
         checked+=1
         rows=[r for r in observations(db,item_id,days) if len(r)>5 and r[5] is not None and r[5]>0]
         if exclude_spikes:
@@ -68,7 +73,7 @@ def top_deals(db,days=90,min_supply=100,cut_pct=5,limit=40,
             'buy_time':slot_name(buy_slot),'sell_time':slot_name(sell_slot),
             'buy_price':buy_price,'sell_price':sell_price,'margin_pct':margin,
             'spread_pct':(sell_price-buy_price)/buy_price*100,
-            'current_supply':current_supply,'buy_samples':buy['count'],
+            'current_supply':current_supply,'filter_quantity':filter_qty,'buy_samples':buy['count'],
             'sell_samples':sell['count'],'buy_weeks':len(weeks[buy_slot]),
             'sell_weeks':len(weeks[sell_slot]),'confidence':confidence,
             'score':score,'dates':len(dates),'snapshots':len(rows)})

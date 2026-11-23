@@ -1,4 +1,4 @@
-Forever Market Tracker v1.2.2 - Windows portable distribution
+Forever Market Tracker v1.2.3 - Windows portable distribution
 ============================================================
 
 This is an unsigned, community-built desktop application. It is not affiliated with Blizzard Entertainment.

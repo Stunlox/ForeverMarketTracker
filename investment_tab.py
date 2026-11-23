@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt,Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,
-    QDoubleSpinBox,QCheckBox,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QLineEdit,QMenu)
+    QDoubleSpinBox,QSpinBox,QCheckBox,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QLineEdit,QMenu)
 from core import copper,QUALITY_COLORS
 from investment import candidates,estimate,allocate
 from timing_advice import timing_for_items
@@ -24,6 +24,11 @@ class BaseInvestmentTab(QWidget):
         self.include_limited=QCheckBox('Include limited-stock vendor items');row.addWidget(self.include_limited)
         self.include_unlimited.toggled.connect(self.refresh)
         self.include_limited.toggled.connect(self.refresh)
+        row.addWidget(QLabel('Min AH qty'))
+        self.min_quantity=QSpinBox();self.min_quantity.setRange(0,100000000);self.min_quantity.setValue(100);self.min_quantity.setSingleStep(100);row.addWidget(self.min_quantity)
+        self.quantity_mode=QComboBox();self.quantity_mode.addItems(['Latest snapshot','Historical average']);row.addWidget(self.quantity_mode)
+        self.min_quantity.valueChanged.connect(self.refresh)
+        self.quantity_mode.currentIndexChanged.connect(self.refresh)
         row.addWidget(QLabel('History'))
         self.days=QComboBox();self.days.addItems(['7','14','30','90']);self.days.setCurrentText('30');row.addWidget(self.days)
         row.addWidget(QLabel('AH cut %'))
@@ -34,7 +39,7 @@ class BaseInvestmentTab(QWidget):
         self.days.currentIndexChanged.connect(self.refresh)
         self.cut.valueChanged.connect(self.refresh)
         self.summary=QLabel();self.summary.setWordWrap(True);self.layout.addWidget(self.summary)
-    def options(self):return {'days':int(self.days.currentText()),'category':self.category.currentText(),'cut_pct':self.cut.value(),'include_unlimited':self.include_unlimited.isChecked(),'include_limited':self.include_limited.isChecked()}
+    def options(self):return {'days':int(self.days.currentText()),'category':self.category.currentText(),'cut_pct':self.cut.value(),'include_unlimited':self.include_unlimited.isChecked(),'include_limited':self.include_limited.isChecked(),'min_quantity':self.min_quantity.value(),'quantity_mode':self.quantity_mode.currentText()}
     def budget_copper(self):return int(round(self.budget.value()*10000))
     def create_table(self,headings):
         table=QTableWidget(0,len(headings));table.setHorizontalHeaderLabels(headings)
@@ -72,14 +77,14 @@ class BaseInvestmentTab(QWidget):
 class SuggestedBuysTab(BaseInvestmentTab):
     def __init__(self,db):
         super().__init__(db)
-        self.table=self.create_table(['Item','Qty','Est. spend','Est. net proceeds','Est. profit','When to BUY (UK)','When to SELL (UK)','Confidence'])
+        self.table=self.create_table(['Item','AH qty','Qty','Est. spend','Est. net proceeds','Est. profit','When to BUY (UK)','When to SELL (UK)','Confidence'])
         self.layout.addWidget(QLabel('Timing slots are historical asking-price observations (UK local time), not guaranteed future windows. Budget is shared across suggestions. Max 35% per item; purchase quantities capped at 10% of observed supply. Verify live listings.'))
         self.refresh()
     def refresh(self,*_):
         options=self.options();items=candidates(self.db,**options)
         proposed=allocate(self.budget_copper(),items,options['cut_pct'])
         timing=timing_for_items(self.db,[d['item_id'] for d in proposed],options['days'])
-        self.render(self.table,[(d,[d['name'],f"{d['quantity']:,}",copper(d['cost']),copper(d['net_proceeds']),
+        self.render(self.table,[(d,[d['name'],f"{d['filter_quantity']:,.0f}",f"{d['quantity']:,}",copper(d['cost']),copper(d['net_proceeds']),
             ('+' if d['profit']>=0 else '-')+copper(abs(d['profit'])),*timing[d['item_id']],d['confidence']]) for d in proposed])
         spend=sum(d['cost'] for d in proposed);profit=sum(d['profit'] for d in proposed)
         self.summary.setText(f'{len(proposed)} suggested purchases | Estimated spend {copper(spend)} / {copper(self.budget_copper())} budget | '
@@ -92,7 +97,7 @@ class TargetItemTab(BaseInvestmentTab):
         search=QHBoxLayout();self.layout.addLayout(search);search.addWidget(QLabel('Search item'))
         self.search=QLineEdit();self.search.setPlaceholderText('Search any material or item...');search.addWidget(self.search)
         self.search.textChanged.connect(self.refresh)
-        self.table=self.create_table(['Item','Available units','Affordable qty','Estimated spend','Est. profit','When to BUY (UK)','When to SELL (UK)','Data confidence'])
+        self.table=self.create_table(['Item','AH qty (filter)','Affordable qty','Estimated spend','Est. profit','When to BUY (UK)','When to SELL (UK)','Data confidence'])
         self.layout.addWidget(QLabel('Affordable quantity uses cheapest-10%-of-units price as an estimate and caps at approximately 10% of observed supply. It is NOT an exact AH buy list.'))
         self.refresh()
     def refresh(self,*_):
@@ -102,9 +107,9 @@ class TargetItemTab(BaseInvestmentTab):
         records=[]
         for d in matches:
             e=estimate(self.budget_copper(),d['buy'],d['resale'],d['affordable_supply'],options['cut_pct'])
-            records.append((d,[d['name'],f"{d['supply']:,}",f"{e['quantity']:,}",copper(e['cost']),
+            records.append((d,[d['name'],f"{d['filter_quantity']:,.0f}",f"{e['quantity']:,}",copper(e['cost']),
                 ('+' if e['profit']>=0 else '-')+copper(abs(e['profit'])),*timing[d['item_id']],d['confidence']]))
         self.render(self.table,records)
         self.summary.setText(f'{len(matches)} estimated profitable item matches (maximum 300 displayed). '
             'Items with insufficient history use a provisional reference price; negative estimates are shown, not hidden. '
-            'Each row independently uses your full budget.')
+            'Each row independently uses your full budget. AH qty is listed supply, not completed sales.')

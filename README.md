@@ -19,3 +19,14 @@ Run `python -m unittest discover -p 'test_*.py'`. Windows PySide6 and Task Sched
 
 ### v1.2.4a: crafting import diagnostics
 The importer now accepts additional nested output/reagent shapes and reports counts of accepted/rejected recipes in Collector Health. If no recipe is usable, the error reports rejection categories and top-level recipe field names to help diagnose ForeverDB schema differences. It does not log or include your API key. The live ForeverDB response has not been verified; share the exact error text if the retry still fails.
+
+## v1.2.4c — Rarity and vendor price visibility
+
+- WoW rarity colours for crafted output names and reagent names (where the item catalogue has quality metadata).
+- Double-click a recipe to see a table of AH price, explicit NPC vendor purchase price, selected cheaper source, and vendor stock classification for every priced reagent.
+- Collector Health and the Professions tab show vendor price coverage: priced inventory rows, total rows, and unique priced items.
+- Vendor importer recognises additional *explicit copper-denominated purchase price* fields; it never treats vendor sell-to-NPC values as purchase costs or assumes missing prices are free.
+- Re-run **Import ForeverDB vendor inventories** in API & Settings to populate any newly recognised price fields; the crafting recipe import need not be repeated.
+- Updated GitHub Actions ZIP/artifact names to `ForeverMarketTracker-Windows-v1.2.4c-Portable` and Windows version metadata to `1.2.4c`.
+- Vendor limited-stock prices are indicative and may not support bulk crafting; no automatic stock-cap quantity calculation is possible without reliable stock amounts.
+- The live authenticated ForeverDB schema and Windows executable have not been verified in this environment.

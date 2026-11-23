@@ -20,6 +20,7 @@ class CollectorHealthTab(QWidget):
         self.backups=QLabel('Backups: —');lay.addWidget(self.backups)
         self.progress_label=QLabel('Collector idle');lay.addWidget(self.progress_label)
         self.vendor_label=QLabel('ForeverDB vendor import: not started this session');lay.addWidget(self.vendor_label)
+        self.vendor_coverage=QLabel('Vendor purchase-price coverage: checking…');lay.addWidget(self.vendor_coverage)
         self.vendor_progress=QProgressBar();self.vendor_progress.setRange(0,100);self.vendor_progress.setValue(0);lay.addWidget(self.vendor_progress)
         self.profession_label=QLabel('ForeverDB crafting recipes: not started this session');lay.addWidget(self.profession_label)
         self.profession_progress=QProgressBar();self.profession_progress.setRange(0,100);lay.addWidget(self.profession_progress)
@@ -55,6 +56,15 @@ class CollectorHealthTab(QWidget):
         self.vendor_progress.setRange(0,100)
         self.vendor_progress.setValue(100 if success else 0)
         self.vendor_label.setText('ForeverDB vendor import: '+message)
+        self.refresh_vendor_coverage()
+    def refresh_vendor_coverage(self):
+        try:
+            from vendor_catalogue import vendor_price_coverage
+            coverage=vendor_price_coverage(self.db)
+            self.vendor_coverage.setText(f"Vendor purchase prices: {coverage['priced']:,} / {coverage['total']:,} inventory rows priced | "
+                f"{coverage['items']:,} unique items | {coverage['missing']:,} missing prices")
+        except Exception as exc:
+            self.vendor_coverage.setText('Vendor price coverage unavailable: '+str(exc))
     def profession_started(self):
         self.profession_progress.setRange(0,0)
         self.profession_label.setText('ForeverDB crafting recipes: connecting…')
@@ -94,6 +104,7 @@ class CollectorHealthTab(QWidget):
         self._last_success=newest
 
     def refresh_local(self):
+        self.refresh_vendor_coverage()
         status=self.schedule_status
         self.next_label.setText('Next Blizzard API pull: '+status['next'] if status['enabled'] else 'Next Blizzard API pull: Not scheduled (enable hourly collection)')
         events=recent_events()

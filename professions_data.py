@@ -1,5 +1,7 @@
 """ForeverDB crafting recipe import and conservative AH/vendor profitability estimates."""
 import json,time,requests
+from collections import namedtuple
+ReagentQuote=namedtuple('ReagentQuote','name count unit source item_id quality ah vendor stock')
 
 BASE='https://foreverdb.net/api/v1/professions'
 CRAFTING=('alchemy','blacksmithing','enchanting','engineering','leatherworking','tailoring','cooking','first-aid')
@@ -165,26 +167,33 @@ def latest_prices(db):
 def profitability(db,profession,cut=5):
     migrate(db);prices=latest_prices(db)
     names=dict(db.execute('SELECT item_id,name FROM items'))
+    item_cols={r[1] for r in db.execute('PRAGMA table_info(items)')}
+    qualities=dict(db.execute('SELECT item_id,quality FROM items')) if 'quality' in item_cols else {}
     # Explicit NPC purchase prices only; unknown vendor cost is not assumed free.
     from vendor_catalogue import migrate as vendor_migrate
     vendor_migrate(db)
-    vendor={r[0]:r[1] for r in db.execute('SELECT item_id,MIN(purchase_copper) FROM vendor_inventory WHERE purchase_copper>0 GROUP BY item_id')}
+    vendor={r[0]:(r[1],r[2]) for r in db.execute('''SELECT item_id,MIN(purchase_copper),stock_type
+        FROM vendor_inventory v WHERE purchase_copper>0 AND purchase_copper=(
+        SELECT MIN(purchase_copper) FROM vendor_inventory w WHERE w.item_id=v.item_id AND w.purchase_copper>0)
+        GROUP BY item_id''')}
     results=[]
     for prof,rid,name,output,qty,skill,raw in db.execute('SELECT * FROM craft_recipes WHERE profession=?',(profession,)):
         detail=[];total=0;missing=[]
         for item,count in json.loads(raw):
             quote=prices.get(item)
             ah_unit=(quote[1] if quote and quote[1]>0 else quote[0] if quote and quote[0]>0 else None)
-            vendor_unit=vendor.get(item)
+            vendor_quote=vendor.get(item)
+            vendor_unit=vendor_quote[0] if vendor_quote else None
             if ah_unit is None and vendor_unit is None:missing.append(names.get(item,f'Item #{item}'));continue
             unit=min(x for x in (ah_unit,vendor_unit) if x is not None)
             source='NPC vendor' if vendor_unit is not None and unit==vendor_unit else 'AH'
             total+=unit*count
-            detail.append((names.get(item,f'Item #{item}'),count,unit,source))
+            detail.append(ReagentQuote(names.get(item,f'Item #{item}'),count,unit,source,item,qualities.get(item),
+                ah_unit,vendor_unit,vendor_quote[1] if vendor_quote else 'unknown'))
         sell=prices.get(output)
         if missing or not sell or sell[1]<=0:
-            results.append(dict(name=name,recipe_id=rid,skill=skill,output=output,quantity=qty,materials=detail,missing=missing or (['Output AH price'] if not sell else []),cost=None,price=None,profit=None,roi=None,supply=sell[2] if sell else 0));continue
+            results.append(dict(name=names.get(output,name) if name.startswith('Recipe #') else name,quality=qualities.get(output),recipe_id=rid,skill=skill,output=output,quantity=qty,materials=detail,missing=missing or (['Output AH price'] if not sell else []),cost=None,price=None,profit=None,roi=None,supply=sell[2] if sell else 0));continue
         gross=sell[1]*qty
         net=int(gross*(100-cut)/100)-total
-        results.append(dict(name=name,recipe_id=rid,skill=skill,output=output,quantity=qty,materials=detail,missing=[],cost=total,price=sell[1],profit=net,roi=100*net/total if total else None,supply=sell[2]))
+        results.append(dict(name=names.get(output,name) if name.startswith('Recipe #') else name,quality=qualities.get(output),recipe_id=rid,skill=skill,output=output,quantity=qty,materials=detail,missing=[],cost=total,price=sell[1],profit=net,roi=100*net/total if total else None,supply=sell[2]))
     return results

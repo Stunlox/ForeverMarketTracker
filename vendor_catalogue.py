@@ -56,6 +56,28 @@ def seen_status(obj):
             if 'classic' in val.lower() or 'cmangos' in val.lower():return 'classic'
     return 'unknown'
 
+def purchase_price(obj):
+    """Explicit vendor *buy* prices only, copper per item. Never use sellPrice.
+
+    Price containers without a recognised currency unit are deliberately ignored.
+    """
+    if not isinstance(obj,dict):return None
+    for key in ('buyPrice','buy_price','purchasePrice','purchase_price','vendorPrice','vendor_price','buyPriceCopper','purchasePriceCopper','costCopper','cost_copper'):
+        raw=obj.get(key)
+        if isinstance(raw,dict):
+            raw=raw.get('copper',raw.get('copperAmount',raw.get('amountCopper')))
+        try:
+            if raw is not None and not isinstance(raw,bool) and int(raw)>0:return int(raw)
+        except (ValueError,TypeError):pass
+    for key in ('price','cost','purchaseCost','purchase_cost'):
+        raw=obj.get(key)
+        if not isinstance(raw,dict):continue
+        for sub in ('copper','copperAmount','amountCopper'):
+            try:
+                if raw.get(sub) is not None and int(raw[sub])>0:return int(raw[sub])
+            except (ValueError,TypeError):pass
+    return None
+
 def parse_vendor(vendor,detail):
     vendor_id=_id(vendor) or _id(detail.get('data',detail) if isinstance(detail,dict) else {})
     if vendor_id is None:return []
@@ -75,20 +97,14 @@ def parse_vendor(vendor,detail):
         if stock=='unknown' and isinstance(obj.get('stock'),dict):stock=stock_type(obj['stock'])
         source=seen_status(obj)
         if source=='unknown':source=provenance
-        price=None
-        for key in ('buyPrice','buy_price','purchasePrice','purchase_price','vendorPrice','vendor_price'):
-            value=obj.get(key)
-            if isinstance(value,dict):value=value.get('copper',value.get('amount'))
-            try:
-                if value is not None and int(value)>0:price=int(value);break
-            except (ValueError,TypeError):pass
+        price=purchase_price(obj)
         rows.append((ident,vendor_id,stock,source,price) if price is not None else (ident,vendor_id,stock,source))
     return rows
 
 def fetch_vendors(settings,progress=None):
     key=settings.get('foreverdb_key','').strip()
     if not key:raise ValueError('Enter your ForeverDB API key in Settings')
-    session=requests.Session();session.headers.update({'X-API-Key':key,'User-Agent':'ForeverMarketTracker/1.2.2 (desktop; data credited to ForeverDB.net)'})
+    session=requests.Session();session.headers.update({'X-API-Key':key,'User-Agent':'ForeverMarketTracker/1.2.4c (desktop; data credited to ForeverDB.net)'})
     def get(url,params=None):
         for attempt in range(4):
             response=session.get(url,params=params,timeout=60)
@@ -144,3 +160,11 @@ def vendor_classification(db):
     migrate(db)
     return db.execute("""SELECT stock_type,COUNT(DISTINCT item_id) FROM vendor_inventory
         GROUP BY stock_type""").fetchall()
+
+def vendor_price_coverage(db):
+    migrate(db)
+    total,priced,items=db.execute("""SELECT COUNT(*),
+        COALESCE(SUM(CASE WHEN purchase_copper>0 THEN 1 ELSE 0 END),0),
+        COUNT(DISTINCT CASE WHEN purchase_copper>0 THEN item_id END)
+        FROM vendor_inventory""").fetchone()
+    return {'total':total,'priced':priced,'missing':total-priced,'items':items}

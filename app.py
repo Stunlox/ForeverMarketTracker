@@ -14,7 +14,7 @@ from weekday_tab import WeekdayBuysTab
 from exclusions_tab import ExclusionsTab
 from exclusions import import_vendor_metadata
 from collection_service import collect_once
-from vendor_catalogue import fetch_vendors,save_inventory,vendor_classification
+from vendor_catalogue import fetch_vendors,save_inventory,vendor_classification,vendor_price_coverage
 from professions_data import fetch_professions,save_recipes
 from professions_tab import ProfessionsTab
 
@@ -32,7 +32,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 1.2.4 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.2.4c | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
@@ -153,12 +153,13 @@ class Main(QMainWindow):
             try:
                 count=save_inventory(db,rows)
                 classifications=dict(vendor_classification(db))
-                return count,number,classifications
+                return count,number,classifications,vendor_price_coverage(db)
             finally:db.close()
         def done(result):
-            count,number,types=result
+            count,number,types,coverage=result
             self.health.vendor_finished(f'{number:,} vendors / {count:,} inventory rows. '
-                f"Unlimited: {types.get('unlimited',0):,}, limited: {types.get('limited',0):,}, unknown: {types.get('unknown',0):,} unique items")
+                f"Unlimited: {types.get('unlimited',0):,}, limited: {types.get('limited',0):,}, unknown: {types.get('unknown',0):,} unique items. "
+                f"Vendor purchase prices: {coverage['priced']:,}/{coverage['total']:,} rows")
             self.statusBar().showMessage('ForeverDB vendor inventory imported successfully')
             self.refresh()
         def failed(message):

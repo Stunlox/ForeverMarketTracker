@@ -21,7 +21,10 @@ def _list(payload,keys):
     raise ValueError('Unexpected ForeverDB profession response: missing list '+str(keys))
 
 def _id(value):
-    if isinstance(value,dict):value=value.get('id',value.get('itemId',value.get('item_id')))
+    if isinstance(value,dict):
+        for k in ('itemId','item_id','id','entry','itemID','spellId'):
+            if value.get(k) is not None:return _id(value[k])
+        return None
     try:return int(value)
     except (ValueError,TypeError):return None
 
@@ -29,34 +32,83 @@ def _positive(value,default=1):
     try:return max(1,int(value))
     except (TypeError,ValueError):return default
 
+def _field(obj,*keys):
+    if not isinstance(obj,dict):return None
+    for k in keys:
+        if obj.get(k) is not None:return obj[k]
+    return None
+
+def _item_id(value):
+    if isinstance(value,dict):
+        for key in ('item','itemId','item_id','createdItem','output','result','product'):
+            if key in value and value[key] is not None:
+                found=_item_id(value[key])
+                if found is not None:return found
+    return _id(value)
+
+def _recipes(payload):
+    obj=_data(payload)
+    if isinstance(obj,list):return obj
+    if isinstance(obj,dict):
+        for key in ('recipes','results','items'):
+            candidate=obj.get(key)
+            if isinstance(candidate,list):return candidate
+            if isinstance(candidate,dict):
+                for sub in ('data','items','results','recipes'):
+                    if isinstance(candidate.get(sub),list):return candidate[sub]
+    raise ValueError('ForeverDB profession page missing recipe list; response keys: '+str(list(obj)[:20] if isinstance(obj,dict) else type(obj).__name__))
+
+def recipe_rejection(obj):
+    if not isinstance(obj,dict):return 'not a recipe object'
+    if _id(_field(obj,'id','recipeId','recipe_id','spellId','spell_id')) is None and _id(_field(obj,'spell','recipe')) is None:return 'missing recipe/spell ID'
+    output=_field(obj,'output','craftedItem','result','creates','makes','createdItem','produces','created','product')
+    if _item_id(_field(obj,'outputItemId','output_item_id','createdItemId','created_item_id')) is None and _item_id(output) is None:return 'missing auctionable output item ID'
+    ingredients=_field(obj,'reagents','ingredients','materials','requiredReagents')
+    if isinstance(ingredients,dict):ingredients=_field(ingredients,'items','reagents','data','materials')
+    if not isinstance(ingredients,list) or not ingredients:return 'missing reagent list'
+    for part in ingredients:
+        if not isinstance(part,dict) or _item_id(_field(part,'item','itemId','item_id','reagent','material')) is None:return 'unrecognised reagent item ID'
+    return 'other invalid recipe'
+
 def normalize_recipe(profession,obj):
     if not isinstance(obj,dict):return None
-    rid=_id(obj.get('id',obj.get('recipeId',obj.get('spellId'))))
+    rid=_id(_field(obj,'id','recipeId','recipe_id','spellId','spell_id')) or _id(_field(obj,'spell','recipe'))
     if rid is None:return None
-    output=obj.get('output',obj.get('craftedItem',obj.get('result',obj.get('creates'))))
-    output_id=_id(obj.get('outputItemId',obj.get('createdItemId',output)))
-    if output_id is None and isinstance(output,dict):output_id=_id(output.get('item',output))
-    if output_id is None:return None  # Non-AH-enchant spells cannot be sold as an item.
-    output_qty=_positive(obj.get('outputQuantity',obj.get('createdCount',output.get('quantity',1) if isinstance(output,dict) else 1)))
-    ingredients=obj.get('reagents',obj.get('ingredients',obj.get('materials')))
+    output=_field(obj,'output','craftedItem','result','creates','makes','createdItem','produces','created','product')
+    output_id=_item_id(_field(obj,'outputItemId','output_item_id','createdItemId','created_item_id')) or _item_id(output)
+    if output_id is None:return None
+    output_qty=_positive(_field(obj,'outputQuantity','createdCount','outputCount','count') or _field(output,'count','quantity','min','minCount') or 1)
+    ingredients=_field(obj,'reagents','ingredients','materials','requiredReagents')
+    if isinstance(ingredients,dict):ingredients=_field(ingredients,'items','reagents','data','materials')
     if not isinstance(ingredients,list):return None
     reagents=[]
     for part in ingredients:
         if not isinstance(part,dict):return None
-        item=_id(part.get('itemId',part.get('item_id',part.get('item'))))
+        item=_item_id(_field(part,'itemId','item_id','item','reagent','material'))
         if item is None:return None
-        reagents.append([item,_positive(part.get('quantity',part.get('count',part.get('amount',1))))])
+        reagents.append([item,_positive(_field(part,'quantity','count','amount','requiredCount','qty') or 1)])
     if not reagents:return None
-    skill=obj.get('requiredSkill',obj.get('skillLevel',obj.get('skill')))
-    if isinstance(skill,dict):skill=skill.get('required',skill.get('level'))
+    skill=_field(obj,'requiredSkill','skillLevel','skill','required_skill')
+    if isinstance(skill,dict):skill=_field(skill,'required','level','orange','min')
     try:skill=int(skill)
     except (TypeError,ValueError):skill=None
     return (profession,rid,str(obj.get('name',f'Recipe #{rid}')),output_id,output_qty,skill,json.dumps(reagents))
 
+def _total(payload):
+    if not isinstance(payload,dict):return None
+    for obj in (payload.get('meta'),payload.get('pagination'),_data(payload)):
+        if isinstance(obj,dict):
+            for key in ('total','totalCount','total_count'):
+                if obj.get(key) is not None:
+                    try:return int(obj[key])
+                    except (ValueError,TypeError):pass
+    return None
+
 def fetch_professions(settings,progress=None):
+    from collections import Counter
     key=settings.get('foreverdb_key','').strip()
     if not key:raise ValueError('Enter your ForeverDB API key in Settings')
-    session=requests.Session();session.headers.update({'X-API-Key':key,'User-Agent':'ForeverMarketTracker/1.2.4 (ForeverDB.net credited)'})
+    session=requests.Session();session.headers.update({'X-API-Key':key,'User-Agent':'ForeverMarketTracker/1.2.4a (ForeverDB.net credited)'})
     def get(url,params=None):
         for attempt in range(4):
             response=session.get(url,params=params,timeout=60)
@@ -69,29 +121,33 @@ def fetch_professions(settings,progress=None):
     available={str(x.get('slug',x.get('name',''))).lower().replace(' ','-'):x for x in listing if isinstance(x,dict)}
     slugs=[s for s in CRAFTING if s in available]
     if not slugs:raise ValueError('No matching crafting professions in ForeverDB response')
-    all_rows=[];counts={}
+    all_rows=[];counts={};reasons=Counter();sample_keys=set();checked=0
     for index,slug in enumerate(slugs):
         offset=0;total=None;seen=set();count=0
         while True:
             payload=get(BASE+'/'+slug,{'limit':100,'offset':offset})
-            rows=_list(payload,('recipes','results','items'))
-            meta=payload.get('meta',{}) if isinstance(payload,dict) else {}
-            if isinstance(meta,dict) and meta.get('total') is not None:total=int(meta['total'])
+            rows=_recipes(payload)
+            if total is None:total=_total(payload)
             if not rows:
                 if total is not None and offset<total:raise ValueError(slug+' recipe listing ended early')
                 break
             for item in rows:
+                checked+=1
+                if isinstance(item,dict):sample_keys.update(item.keys())
                 parsed=normalize_recipe(slug,item)
                 if parsed and parsed[1] not in seen:all_rows.append(parsed);seen.add(parsed[1]);count+=1
+                elif not parsed:reasons[recipe_rejection(item)]+=1
             offset+=len(rows)
-            if progress:progress(f'{slug}: {offset:,} recipes checked',index*100+min(99,int(100*offset/max(total or offset,1))),len(slugs)*100)
+            if progress:progress(f'{slug}: {offset:,} checked / {count:,} usable / {sum(reasons.values()):,} rejected',index*100+min(99,int(100*offset/max(total or offset,1))),len(slugs)*100)
             if total is not None and offset>=total:break
             if len(rows)<100:break
             if offset>100000:raise ValueError('Too many recipes in '+slug)
             time.sleep(.12)
         counts[slug]=count
-        if progress:progress(f'{slug} complete ({count:,} usable recipes)',(index+1)*100,len(slugs)*100)
-    if not all_rows:raise ValueError('No usable craft recipes found; original data retained. Inspect ForeverDB schema.')
+        if progress:progress(f'{slug} complete ({count:,} usable, {checked:,} total checked)',(index+1)*100,len(slugs)*100)
+    if not all_rows:
+        summary=', '.join(f'{k}: {v}' for k,v in reasons.most_common(4))
+        raise ValueError(f'No usable recipes from {checked:,} checked. Rejections: {summary or "none"}. Recipe keys: {", ".join(sorted(sample_keys))[:350] or "none"}. Existing data retained.')
     return all_rows,counts
 
 def save_recipes(db,rows):

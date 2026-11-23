@@ -10,6 +10,7 @@ from timing_tab import MarketTimingTab
 from simplified_tab import SimplifiedTimingTab
 from collector_health import CollectorHealthTab
 from investment_tab import SuggestedBuysTab,TargetItemTab
+from weekday_tab import WeekdayBuysTab
 from exclusions_tab import ExclusionsTab
 from exclusions import import_vendor_metadata
 from collection_service import collect_once
@@ -29,15 +30,16 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 1.2.3 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.2.3a | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
         self.simplified=SimplifiedTimingTab(self.db);self.tabs.addTab(self.simplified,'Market Timing Simplified')
         self.suggested=SuggestedBuysTab(self.db);self.tabs.addTab(self.suggested,'Suggested Buys')
+        self.weekday=WeekdayBuysTab(self.db);self.tabs.addTab(self.weekday,'Suggested Buys (Weekday)')
         self.target=TargetItemTab(self.db);self.tabs.addTab(self.target,'Target Item')
         self.exclusions=ExclusionsTab(self.db);self.tabs.addTab(self.exclusions,'Manage Exclusions')
-        for widget in (self.simplified,self.suggested,self.target):widget.exclusions_changed.connect(self.exclusion_refresh)
+        for widget in (self.simplified,self.suggested,self.weekday,self.target):widget.exclusions_changed.connect(self.exclusion_refresh)
         self.health=CollectorHealthTab(self.db);self.tabs.addTab(self.health,'Collector Health');self.health.collect_requested.connect(self.scan)
         self.health.snapshot_saved.connect(self.refresh)
         self.config=QWidget();self.tabs.addTab(self.config,'API & Settings');self.setup_config()
@@ -47,6 +49,7 @@ class Main(QMainWindow):
         self.exclusions.refresh()
         self.simplified.refresh()
         self.suggested.refresh()
+        self.weekday.refresh()
         self.target.refresh()
     def setup_market(self):
         lay=QVBoxLayout(self.market);top=QHBoxLayout();lay.addLayout(top)
@@ -186,6 +189,7 @@ class Main(QMainWindow):
         self.timing.load_items()
         self.simplified.refresh()
         self.suggested.refresh()
+        self.weekday.refresh()
         self.target.refresh()
         self.exclusions.refresh()
     def show_history(self):

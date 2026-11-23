@@ -1,16 +1,9 @@
-# Forever Market Tracker v1.2.3 — Market Volume Filters
+# Forever Market Tracker v1.2.3a — Weekday Overnight Trading
 
-Includes all v1.2.2 functionality and a **minimum AH quantity** filter (default 100 units) in Market Browser, Market Timing Simplified, Suggested Buys and Target Item.
-
-- Choose **Latest snapshot** or **Historical average** in each tab. Historical average uses all observations in the selected lookback window, including only snapshots where the item was listed.
-- Set minimum to **0** to disable filtering.
-- AH quantity is *listed supply*, **not sales volume**; high supply does not guarantee demand.
-- Investment planner affordability still uses its separate 10% of *latest observed supply* conservative cap, even when filtering on historical average.
-- Market Timing Simplified shows the chosen filter quantity in its AH qty column.
-- Historical auction data and vendor classifications remain untouched. No additional ForeverDB or Blizzard download is required.
+New tab **Suggested Buys (Weekday)**: pairs Monday–Thursday 18:00–23:59 UK evening asking prices with the immediately following Tuesday–Friday 12:00–17:59 UK afternoon asking prices. Saturday and Sunday snapshots are excluded from every strategy input, including supply averages and latest-price proxies. Friday evening is excluded because the following day is Saturday. Default history 30 days, minimum 3 paired days, 100 AH units and 60% positive pairs. Includes existing vendor exclusions, category filters, manual right-click exclusions, and UK DST handling. Historical asking prices do not prove completed sales.
 
 ## Installation
-Extract this ZIP and upload its contents (including `.github/workflows/windows-exe.yml`) to the root of your GitHub repository. Commit to main and download the `ForeverMarketTracker-Windows-v1.2.3-Portable` GitHub Actions artifact. Keep both app and collector folders together.
+Extract this ZIP and upload its contents (including `.github/workflows/windows-exe.yml`) to the root of your GitHub repository. Commit to main and download the `ForeverMarketTracker-Windows-v1.2.3a-Portable` GitHub Actions artifact. Keep both app and collector folders together.
 
 ## Verification
 Run `python -m unittest discover -p 'test_*.py'`. Windows PySide6 and Task Scheduler behaviour must be tested on Windows.

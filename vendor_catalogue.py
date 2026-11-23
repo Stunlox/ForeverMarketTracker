@@ -104,7 +104,7 @@ def parse_vendor(vendor,detail):
 def fetch_vendors(settings,progress=None):
     key=settings.get('foreverdb_key','').strip()
     if not key:raise ValueError('Enter your ForeverDB API key in Settings')
-    session=requests.Session();session.headers.update({'X-API-Key':key,'User-Agent':'ForeverMarketTracker/1.2.4c (desktop; data credited to ForeverDB.net)'})
+    session=requests.Session();session.headers.update({'X-API-Key':key,'User-Agent':'ForeverMarketTracker/1.2.4e (desktop; data credited to ForeverDB.net)'})
     def get(url,params=None):
         for attempt in range(4):
             response=session.get(url,params=params,timeout=60)
@@ -128,12 +128,15 @@ def fetch_vendors(settings,progress=None):
         if offset>100000:raise ValueError('Too many vendor records')
         time.sleep(.12)
     if not vendors:raise ValueError('ForeverDB returned no vendors')
-    records=[]
+    records=[];priced=0;unique_priced=set()
     for index,vendor in enumerate(vendors,1):
         ident=_id(vendor)
         if ident is None:continue
-        detail=get(BASE+'/'+str(ident));records.extend(parse_vendor(vendor,detail))
-        if progress:progress('Fetching vendor inventories',index,len(vendors))
+        detail=get(BASE+'/'+str(ident));batch=parse_vendor(vendor,detail);records.extend(batch)
+        for row in batch:
+            if len(row)>4 and row[4] is not None and row[4]>0:
+                priced+=1;unique_priced.add(row[0])
+        if progress:progress(f'Fetching vendor inventories | {len(records):,} rows | {priced:,} priced | {len(unique_priced):,} priced items | {len(records)-priced:,} missing',index,len(vendors))
         time.sleep(.12)
     if not records:raise ValueError('No vendor inventory records found; nothing changed')
     return records,len(vendors)

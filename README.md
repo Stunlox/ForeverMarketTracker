@@ -38,3 +38,10 @@ The importer now accepts additional nested output/reagent shapes and reports cou
 - Timing advice needs at least two observations in each proposed buy/sell hour; otherwise it is labelled provisional.
 - Windows GitHub Actions build name and app version updated to v1.2.4d.
 - Historical SQLite data and ForeverDB imports are untouched. These are asking-price estimates, not evidence of executed sales; deposits and failed auctions are excluded.
+
+
+## v1.2.4e — live vendor coverage and consistent market pricing
+- During vendor import, Collector Health updates vendor progress, downloaded inventory rows, rows with explicit NPC purchase prices, unique priced items, and missing prices after each vendor API response. No additional API requests are made for these counters. Existing vendor database stays unchanged until the full import succeeds.
+- Market Timing uses the shared isolated-spike detector for its selected metric, excludes flagged observations from the heatmap and timing advice, and requires repeated observations for precise timing recommendations.
+- Target Item adds historical buy and timed net/unit columns, distinct from current buy and net/unit. Historical values are estimates, not guaranteed executable orders.
+- Windows Actions artifact and EXE version set to v1.2.4e.

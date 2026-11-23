@@ -44,15 +44,20 @@ class CollectorHealthTab(QWidget):
         successes=[e for e in recent_events() if e.get('status')=='success']
         self._last_success=self.db.execute('SELECT MAX(id) FROM snapshots').fetchone()[0]
     def vendor_started(self):
+        self.vendor_import_running=True
         self.vendor_progress.setRange(0,0)
         self.vendor_label.setText('ForeverDB vendor import: connecting…')
+        self.vendor_coverage.setText('LIVE IMPORT: waiting for vendor inventory responses… | Saved database unchanged')
     def vendor_progress_update(self,stage,current,total):
         if total:
             self.vendor_progress.setRange(0,100)
             self.vendor_progress.setValue(min(100,int(100*current/total)))
         else:self.vendor_progress.setRange(0,0)
-        self.vendor_label.setText(f'ForeverDB: {stage} — {current:,} / {total:,}' if total else f'ForeverDB: {stage} — {current:,}')
+        self.vendor_label.setText(f'ForeverDB: {stage.split(" | ")[0]} — {current:,} / {total:,}' if total else f'ForeverDB: {stage}')
+        if ' | ' in stage:
+            self.vendor_coverage.setText('LIVE IMPORT (unsaved): '+stage.split(' | ',1)[1]+' | Saved database unchanged until completion')
     def vendor_finished(self,message,success=True):
+        self.vendor_import_running=False
         self.vendor_progress.setRange(0,100)
         self.vendor_progress.setValue(100 if success else 0)
         self.vendor_label.setText('ForeverDB vendor import: '+message)
@@ -104,7 +109,7 @@ class CollectorHealthTab(QWidget):
         self._last_success=newest
 
     def refresh_local(self):
-        self.refresh_vendor_coverage()
+        if not getattr(self,'vendor_import_running',False):self.refresh_vendor_coverage()
         status=self.schedule_status
         self.next_label.setText('Next Blizzard API pull: '+status['next'] if status['enabled'] else 'Next Blizzard API pull: Not scheduled (enable hourly collection)')
         events=recent_events()

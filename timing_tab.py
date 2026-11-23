@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,
     QSpinBox,QTableWidget,QTableWidgetItem,QHeaderView,QPushButton,QSplitter)
 from market_timing import DAYS, market_items, categories, observations, analyse, summarize, price_ratio
 from core import copper,quality_for_items,QUALITY_COLORS,QUALITY_NAMES
+from pricing_reference import isolated_spikes
 
 class MarketTimingTab(QWidget):
     def __init__(self, db, parent=None):
@@ -30,7 +31,7 @@ class MarketTimingTab(QWidget):
         self.summary=QLabel('Early signals appear with limited data and are provisional.')
         self.summary.setWordWrap(True);layout.addWidget(self.summary)
         self.note=QLabel('UK local time (Europe/London). Each cell: median of selected hourly price metric / median supply / snapshot count.\n'
-            'Green = lowest observed item price; red = highest; grey = missing or identical prices. Even a single observation per slot is coloured when prices vary. Asking prices are not confirmed sales.')
+            'Green = lowest cleaned item price; red = highest cleaned price; grey = missing or identical prices. Isolated spikes are excluded from the heatmap. Single-observation slots are provisional. Asking prices are not confirmed sales.')
         self.note.setWordWrap(True);layout.addWidget(self.note)
         self.table=QTableWidget(7,24);self.table.setVerticalHeaderLabels(DAYS)
         self.table.setHorizontalHeaderLabels([f'{hour:02d}:00' for hour in range(24)])
@@ -70,7 +71,11 @@ class MarketTimingTab(QWidget):
             return
         days=int(self.days.currentText().split()[0])
         rows=observations(self.db,item_id,days)
-        self.cells=analyse(rows,ZoneInfo('Europe/London'),metric=self.metric.currentData(),min_samples=1)
+        metric=self.metric.currentData()
+        idx={'lowest':1,'median':2,'cheap10':5,'cheap20':6}[metric]
+        spikes=isolated_spikes(rows,price_index=idx)
+        cleaned=[r for i,r in enumerate(rows) if i not in spikes]
+        self.cells=analyse(cleaned,ZoneInfo('Europe/London'),metric=metric,min_samples=1)
         valid=[c['median_price'] for c in self.cells.values()]
         lo=min(valid) if valid else 0;hi=max(valid) if valid else 0
         for weekday in range(7):
@@ -89,7 +94,8 @@ class MarketTimingTab(QWidget):
                     cell.setForeground(QColor('#ffffff'))
                 self.table.setItem(weekday,hour,cell)
         repeats=len(rows);days_seen=len({__import__('datetime').datetime.fromtimestamp(r[0],ZoneInfo('Europe/London')).date() for r in rows})
-        result=summarize(self.cells,min_samples=1)
+        result=summarize(self.cells,min_samples=2)
+        spike_note=f' {len(spikes)} isolated price spike(s) excluded from recommendations.' if spikes else ''
         metric_label=self.metric.currentText()
         if result and days_seen>=2:
             buy_day,buy_hour=result['buy'];sell_day,sell_hour=result['sell']
@@ -99,12 +105,12 @@ class MarketTimingTab(QWidget):
                 f"Metric: {metric_label}. Observed cheapest: {DAYS[buy_day]} {buy_hour:02d}:00 ({copper(result['buy_price'])}, n={result['buy_samples']}). "
                 f"Highest: {DAYS[sell_day]} {sell_hour:02d}:00 ({copper(result['sell_price'])}, n={result['sell_samples']}). "
                 f"Illustrative spread after 5% AH cut: {potential:+.1f}% before deposits/failed sales. "
-                f"{'LOW DATA — provisional only.' if days_seen<7 else 'Observed pattern, not a guaranteed trade.'}")
+                f"{'LOW DATA — provisional only.' if days_seen<7 else 'Observed pattern, not a guaranteed trade.'}{spike_note}")
         else:
             self.summary.setText(f'{repeats} snapshots across {days_seen} dates. '
                 f'{len(self.cells)} observed time slots for {metric_label}. '
-                'At least two dates and two different observed prices are needed for a provisional buy/sell signal. '
-                'Heatmap colouring does not require repeat observations.')
+                'At least two observations in each buy/sell hour are required for timing advice. '
+                'Heatmap colouring does not require repeat observations.'+spike_note)
         self.detail.setText('Select a heatmap cell for its statistics.')
 
     def selected_cell(self,day,hour):

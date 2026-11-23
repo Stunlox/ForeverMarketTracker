@@ -57,12 +57,16 @@ def candidates(db,days=30,category='Trade Goods',min_supply=1,cut_pct=5,limit=30
         # Conservative lower quartile of *market* median asking prices.
         # Historical cheapest-tier prices represent acquisition, not resale.
         resale=conservative_resale([market for _,_,market,_ in cleaned]) or int(median or low or 0)
+        # Historical low-cost windows are separate from buying at today's asking price.
+        historic_buys=sorted(p for _,p,_,_ in cleaned if p and p>0)
+        timed_buy=historic_buys[max(0,(len(historic_buys)-1)//4)] if len(historic_buys)>=3 else None
         # Cheapest-10% metric is a proxy, not an executable order-book quote.
         buy=int(cheap10 or low or 0)
         if buy<=0 or (resale<=buy and not include_all):continue
         net_per_unit=round(resale*(1-cut_pct/100))-buy
         if net_per_unit<=0 and not include_all:continue
         result.append({'item_id':item_id,'name':name,'category':cat,'quality':quality,
+            'timed_buy':timed_buy,'timed_net_per_unit':(round(resale*(1-cut_pct/100))-timed_buy) if timed_buy else None,
             'supply':supply,'affordable_supply':max(1,math.floor(supply*.10)),'buy':buy,'resale':resale,'net_per_unit':net_per_unit,
             'margin':net_per_unit/buy*100,'snapshots':len(cleaned),'dates':distinct_dates,
             'confidence':'Insufficient data' if len(cleaned)<3 else 'Low data' if distinct_dates<3 else 'Moderate' if distinct_dates<7 else 'Good' if distinct_dates<14 else 'High'})

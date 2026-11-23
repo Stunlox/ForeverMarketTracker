@@ -7,6 +7,6 @@ VSVersionInfo(
     StringStruct('InternalName', 'ForeverMarketTracker'),
     StringStruct('OriginalFilename', 'ForeverMarketTracker.exe'),
     StringStruct('ProductName', 'Forever Market Tracker'),
-    StringStruct('ProductVersion', '1.2.4d')
+    StringStruct('ProductVersion', '1.2.4e')
   ])]), VarFileInfo([VarStruct('Translation', [1033, 1200])])]
 )

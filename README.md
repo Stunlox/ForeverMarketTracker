@@ -1,6 +1,27 @@
-# Forever Market Tracker v0.5 — Full ForeverDB Catalogue
+# Forever Market Tracker v1.2
 
-This version imports **all** pages from the official ForeverDB item API, not just the first 100. It preserves the existing SQLite price history and saved credentials. The API is queried with `limit=100` and increasing `offset`, with throttling and retries for 429 responses. Catalogue metadata is committed only when the full download succeeds. Categories are derived from item class/subclass IDs when available; unknown classifications remain Uncategorised.
+## What's new
+
+- **Market Timing Simplified:** up to 300 ranked deals (25, 50, 100, 200, 300), default 100; optional minimum net profit per unit; isolated price spikes that immediately revert are excluded by default. The detector requires neighboring observations and does not claim to detect all manipulation.
+- **Suggested Buys:** enter a total gold budget; the app proposes multiple purchases from the current AH snapshot and recent price history, with no more than 35% of your budget in one item. Spending is shared across rows, not repeated for each.
+- **Target Item:** search by item name, choose category and budget, and see estimated affordable quantity, spend and net resale profit. Items with negative projected returns remain visible.
+- **Automatic refresh:** after a successful scheduled collection, the event-log file watcher triggers a refresh of Market Browser, Market Timing, Simplified and both investment screens. This does not request another Blizzard API pull.
+- **Silent collector:** Windows release now packages the scheduled collector with `--windowed`, avoiding a black console window.
+- **Version labels:** app title and Windows executable metadata updated to 1.2.
+
+## IMPORTANT: purchase estimates, not executable quotes
+
+The current snapshot database stores **aggregated** cheapest 10%-of-units prices, not individual auction tiers. Therefore Suggested Buys and Target Item cannot yet calculate an exact shopping basket or guarantee that all quantities can be purchased at the quoted unit price. Both screens conservatively cap quantities at roughly 10% of observed supply and use the historical median of cleaned cheapest-10% asking prices as a resale reference. These are not completed sales or guaranteed profits. Check the live Auction House before purchasing. Deposits, failed sales, listing changes and price slippage are excluded. More accurate order-book depth requires a future schema update.
+
+## Installation
+
+Upload all source files, including `.github/workflows/windows-exe.yml`, to the existing GitHub repository. Commit to `main`, wait for the Windows build, and download the `ForeverMarketTracker-Windows-v1.2-Portable` artifact. Extract both `ForeverMarketTracker` and `ForeverMarketCollector` folders together. Run `ForeverMarketTracker.exe`. Existing settings and SQLite history remain in `%LOCALAPPDATA%\ForeverMarketTracker`.
+
+If the hourly Task Scheduler task points to an old extracted release, disable and re-enable the schedule from Collector Health after extracting v1.2.
+
+## Testing
+
+Run `python -m unittest discover -p "test_*.py" -v`. The Python unit tests do not substitute for running the compiled PySide6 interface or Windows Task Scheduler.
 
 ## Update
 Upload the extracted files (including `.github/workflows/windows-exe.yml`) to the same GitHub repository, replacing existing files. GitHub Actions builds the standalone Windows EXE. Close v0.4 before launching v0.5. Keep your existing local database in `%USERPROFILE%\AppData\Local\ForeverMarketTracker`.

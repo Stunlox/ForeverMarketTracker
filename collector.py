@@ -1,6 +1,10 @@
-"""Headless hourly collector, invoked by Windows Task Scheduler."""
+"""Silent hourly collector; progress and failures are written to local event logs."""
 import sys
 from collection_service import collect_once
-if __name__=='__main__':
-    try:print(f'Stored {collect_once("scheduled"):,} items')
-    except Exception as exc:print(f'Collection failed: {exc}',file=sys.stderr);sys.exit(1)
+
+if __name__ == '__main__':
+    try:
+        collect_once('scheduled')
+    except Exception:
+        # collection_service records failures in collector_events.jsonl.
+        sys.exit(1)

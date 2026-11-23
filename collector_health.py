@@ -8,6 +8,7 @@ from scheduler import enable_task,disable_task,task_status
 
 class CollectorHealthTab(QWidget):
     collect_requested=Signal()
+    snapshot_saved=Signal()
     def __init__(self,db,parent=None):
         super().__init__(parent);self.db=db;self.running=False
         lay=QVBoxLayout(self)
@@ -32,8 +33,11 @@ class CollectorHealthTab(QWidget):
         LOG_PATH.touch(exist_ok=True)
         self.watcher=QFileSystemWatcher([str(LOG_PATH)], self)
         self.watcher.fileChanged.connect(self._event_log_changed)
+        self._last_success=None
         self.schedule_status={'enabled':False,'next':'Not checked'}
         self.refresh()
+        successes=[e for e in recent_events() if e.get('status')=='success']
+        self._last_success=self.db.execute('SELECT MAX(id) FROM snapshots').fetchone()[0]
     def set_running(self,stage):
         self.running=True;self.manual.setEnabled(False);self.progress.setRange(0,0);self.progress_label.setText(stage)
     def set_finished(self,message):
@@ -54,6 +58,10 @@ class CollectorHealthTab(QWidget):
         if str(LOG_PATH) not in self.watcher.files() and LOG_PATH.exists():
             self.watcher.addPath(str(LOG_PATH))
         self.refresh_local()
+        newest=self.db.execute('SELECT MAX(id) FROM snapshots').fetchone()[0]
+        if newest is not None and self._last_success is not None and newest!=self._last_success:
+            self.snapshot_saved.emit()
+        self._last_success=newest
 
     def refresh_local(self):
         status=self.schedule_status

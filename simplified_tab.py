@@ -1,8 +1,8 @@
-"""Top 40 recurring trade-goods timing patterns, using recorded hourly snapshots."""
+"""Up to 300 ranked historical timing opportunities."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,
-    QSpinBox,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView)
+    QSpinBox,QCheckBox,QDoubleSpinBox,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView)
 from simplified_market import top_deals
 from market_timing import categories
 from core import copper,quality_for_items,QUALITY_COLORS,QUALITY_NAMES
@@ -22,7 +22,12 @@ class SimplifiedTimingTab(QWidget):
         self.supply=QSpinBox();self.supply.setRange(0,1000000);self.supply.setValue(100);self.supply.setSingleStep(100);controls.addWidget(self.supply)
         controls.addWidget(QLabel('AH cut %'))
         self.cut=QSpinBox();self.cut.setRange(0,30);self.cut.setValue(5);controls.addWidget(self.cut)
-        reload=QPushButton('Find top 40 deals');reload.clicked.connect(self.refresh);controls.addWidget(reload)
+        controls.addWidget(QLabel('Deals'))
+        self.limit=QComboBox();self.limit.addItems(['25','50','100','200','300']);self.limit.setCurrentText('100');controls.addWidget(self.limit)
+        controls.addWidget(QLabel('Min profit / unit (g)'))
+        self.min_profit=QDoubleSpinBox();self.min_profit.setRange(0,100000);self.min_profit.setDecimals(1);controls.addWidget(self.min_profit)
+        self.spikes=QCheckBox('Exclude temporary spikes');self.spikes.setChecked(True);controls.addWidget(self.spikes)
+        reload=QPushButton('Find deals');reload.clicked.connect(self.refresh);controls.addWidget(reload)
         controls.addStretch()
         self.summary=QLabel();self.summary.setWordWrap(True);layout.addWidget(self.summary)
         self.table=QTableWidget(0,10);self.table.setHorizontalHeaderLabels([
@@ -44,11 +49,14 @@ class SimplifiedTimingTab(QWidget):
         self.days.currentIndexChanged.connect(self.refresh)
         self.supply.valueChanged.connect(self.refresh)
         self.cut.valueChanged.connect(self.refresh)
+        self.limit.currentIndexChanged.connect(self.refresh)
+        self.min_profit.valueChanged.connect(self.refresh)
+        self.spikes.toggled.connect(self.refresh)
         self.refresh()
 
     def refresh(self,*_):
         days=int(self.days.currentText().split()[0])
-        deals,checked=top_deals(self.db,days=days,min_supply=self.supply.value(),cut_pct=self.cut.value(),category=self.category.currentText())
+        deals,checked=top_deals(self.db,days=days,min_supply=self.supply.value(),cut_pct=self.cut.value(),category=self.category.currentText(),limit=int(self.limit.currentText()),min_profit_gold=self.min_profit.value(),exclude_spikes=self.spikes.isChecked())
         self.table.setRowCount(len(deals))
         qualities=quality_for_items(self.db,[d['item_id'] for d in deals])
         for i,d in enumerate(deals):
@@ -65,8 +73,8 @@ class SimplifiedTimingTab(QWidget):
                 if j in (0,6,7):item.setTextAlignment(Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
                 self.table.setItem(i,j,item)
         if deals:
-            self.summary.setText(f'{len(deals)} ranked historical timing opportunities from {checked:,} currently high-supply trade goods. '
+            self.summary.setText(f'{len(deals)} ranked historical timing opportunities from {checked:,} items matching the selected category and supply filter. '
                 'Provisional asking-price signals, ranked by estimated margin, supply and confidence. Low-data signals are speculative; no actual sale prices are available.')
         else:
-            self.summary.setText(f'No statistically eligible opportunities yet among {checked:,} trade goods meeting the current supply filter. '
+            self.summary.setText(f'No statistically eligible opportunities yet among {checked:,} items meeting the current supply filter. '
                 'Keep collecting hourly snapshots. At least two distinct dates with positive cheap-10% prices are needed for provisional signals.')

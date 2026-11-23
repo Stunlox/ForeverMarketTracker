@@ -1,4 +1,4 @@
-Forever Market Tracker v1.1 - Windows portable distribution
+Forever Market Tracker v1.2 - Windows portable distribution
 ============================================================
 
 This is an unsigned, community-built desktop application. It is not affiliated with Blizzard Entertainment.
@@ -6,7 +6,7 @@ This is an unsigned, community-built desktop application. It is not affiliated w
 Run ForeverMarketTracker.exe inside the ForeverMarketTracker folder.
 Keep the entire folder together; do not move the EXE out by itself.
 
-The separate ForeverMarketCollector folder contains an optional command-line collector.
+The separate ForeverMarketCollector folder contains an silent background collector.
 No installation, admin access, or browser security exception should be required.
 
 Data and settings are stored locally under:

@@ -11,8 +11,11 @@ def item_timing(db,item_id,days=30):
     if len(rows)<2:return ('Insufficient history','Insufficient history')
     cells=analyse(rows,UK,min_samples=1,metric='cheap10')
     if len(cells)<2:return ('Insufficient history','Insufficient history')
-    buy=min(cells,key=lambda k:cells[k]['median_price'])
-    sell=max(cells,key=lambda k:cells[k]['median_price'])
+    # An hour observed only once must never become a precise timing instruction.
+    reliable={k:v for k,v in cells.items() if v['count']>=2}
+    if len(reliable)<2:return ('Provisional — insufficient repeated hours','Provisional — insufficient repeated hours')
+    buy=min(reliable,key=lambda k:reliable[k]['median_price'])
+    sell=max(reliable,key=lambda k:reliable[k]['median_price'])
     if cells[buy]['median_price']>=cells[sell]['median_price']:return ('No clear pattern','No clear pattern')
     return (slot_name(buy),slot_name(sell))
 

@@ -13,23 +13,11 @@ def confidence_label(dates,samples,weeks):
     if dates>=3 and samples>=2:return 'Moderate'
     return 'Low data'
 
-def temporary_spike_indices(rows, ratio=2.5):
-    """Remove isolated >2.5x upward/downward excursions that immediately revert.
-
-    Uses adjacent snapshots only; a sustained change is never labelled a reversal.
-    """
-    ordered=sorted(enumerate(rows), key=lambda pair:pair[1][0])
-    bad=set()
-    for pos in range(1,len(ordered)-1):
-        original,row=ordered[pos]
-        before=ordered[pos-1][1][5] if len(ordered[pos-1][1])>5 else None
-        after=ordered[pos+1][1][5] if len(ordered[pos+1][1])>5 else None
-        price=row[5] if len(row)>5 else None
-        if not before or not after or not price:continue
-        baseline=statistics.median((before,after))
-        if max(before,after)/min(before,after)>1.35:continue
-        if price>=baseline*ratio or price<=baseline/ratio:bad.add(original)
-    return bad
+def temporary_spike_indices(rows, ratio=1.65):
+    """Flag isolated reversals, including 8g -> 16g -> 9g spikes."""
+    from pricing_reference import isolated_spikes
+    # Preserve the observation tuple layout used throughout timing analysis.
+    return isolated_spikes(rows,price_index=5,ratio=ratio)
 
 def top_deals(db,days=90,min_supply=100,cut_pct=5,limit=40,
               min_dates=2,min_slot_samples=1,min_weeks=1,category='Trade Goods',

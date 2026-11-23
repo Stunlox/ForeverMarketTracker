@@ -32,7 +32,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 1.2.4c | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.2.4d | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')

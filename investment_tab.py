@@ -97,7 +97,7 @@ class TargetItemTab(BaseInvestmentTab):
         search=QHBoxLayout();self.layout.addLayout(search);search.addWidget(QLabel('Search item'))
         self.search=QLineEdit();self.search.setPlaceholderText('Search any material or item...');search.addWidget(self.search)
         self.search.textChanged.connect(self.refresh)
-        self.table=self.create_table(['Item','AH qty (filter)','Affordable qty','Estimated spend','Est. profit','When to BUY (UK)','When to SELL (UK)','Data confidence'])
+        self.table=self.create_table(['Item','AH qty (filter)','Affordable qty','Estimated spend','Est. profit','Buy/unit','Resale/unit','Net/unit','When to BUY (UK)','When to SELL (UK)','Data confidence'])
         self.layout.addWidget(QLabel('Affordable quantity uses cheapest-10%-of-units price as an estimate and caps at approximately 10% of observed supply. It is NOT an exact AH buy list.'))
         self.refresh()
     def refresh(self,*_):
@@ -108,8 +108,8 @@ class TargetItemTab(BaseInvestmentTab):
         for d in matches:
             e=estimate(self.budget_copper(),d['buy'],d['resale'],d['affordable_supply'],options['cut_pct'])
             records.append((d,[d['name'],f"{d['filter_quantity']:,.0f}",f"{e['quantity']:,}",copper(e['cost']),
-                ('+' if e['profit']>=0 else '-')+copper(abs(e['profit'])),*timing[d['item_id']],d['confidence']]))
+                ('+' if e['profit']>=0 else '-')+copper(abs(e['profit'])),copper(d['buy']),copper(d['resale']),('+' if d['net_per_unit']>=0 else '-')+copper(abs(d['net_per_unit'])),*timing[d['item_id']],d['confidence']]))
         self.render(self.table,records)
-        self.summary.setText(f'{len(matches)} estimated profitable item matches (maximum 300 displayed). '
+        self.summary.setText(f'{len(matches)} item matches (maximum 300 displayed). '
             'Items with insufficient history use a provisional reference price; negative estimates are shown, not hidden. '
             'Each row independently uses your full budget. AH qty is listed supply, not completed sales.')

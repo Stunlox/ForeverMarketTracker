@@ -30,3 +30,11 @@ The importer now accepts additional nested output/reagent shapes and reports cou
 - Updated GitHub Actions ZIP/artifact names to `ForeverMarketTracker-Windows-v1.2.4c-Portable` and Windows version metadata to `1.2.4c`.
 - Vendor limited-stock prices are indicative and may not support bulk crafting; no automatic stock-cap quantity calculation is possible without reliable stock amounts.
 - The live authenticated ForeverDB schema and Windows executable have not been verified in this environment.
+
+## v1.2.4d — Robust trading price references
+- Isolated hourly 8–9g → ~16g → 8–9g reversals are excluded from timing analysis, but sustained repricing and recurring weekday patterns are retained.
+- Target Item and Suggested Buys now estimate conservative resale from the lower quartile of historical **market median** asking prices, rather than assuming the cheapest 10% is the resale market.
+- Target Item exposes buy/unit, resale/unit and estimated net profit/unit so calculations are auditable.
+- Timing advice needs at least two observations in each proposed buy/sell hour; otherwise it is labelled provisional.
+- Windows GitHub Actions build name and app version updated to v1.2.4d.
+- Historical SQLite data and ForeverDB imports are untouched. These are asking-price estimates, not evidence of executed sales; deposits and failed auctions are excluded.

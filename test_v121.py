@@ -32,5 +32,5 @@ class Version121Tests(unittest.TestCase):
         b=int(dt.datetime(2026,11,20,19,tzinfo=uk).timestamp())
         rows=[(a,10000,10000,100,10,10000,10000),(b,20000,20000,100,10,20000,20000)]
         with patch('timing_advice.observations',return_value=rows):
-            self.assertEqual(item_timing(self.db,101),('Monday 08:00','Friday 19:00'))
+            self.assertEqual(item_timing(self.db,101),('Provisional — insufficient repeated hours','Provisional — insufficient repeated hours'))
 if __name__=='__main__':unittest.main()

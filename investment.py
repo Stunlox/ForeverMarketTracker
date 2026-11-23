@@ -4,7 +4,7 @@ Exact purchase tiers are not in the historical schema; estimates must not imply
 that every unit can actually be bought at the observed cheapest price.
 """
 import statistics,time,math
-from simplified_market import temporary_spike_indices
+from pricing_reference import isolated_spikes,conservative_resale
 
 def budget_quantity(budget_copper, unit_price_copper, supply):
     if budget_copper<=0 or unit_price_copper<=0 or supply<=0:return 0
@@ -39,22 +39,24 @@ def candidates(db,days=30,category='Trade Goods',min_supply=1,cut_pct=5,limit=30
         batch=ids[offset:offset+800]
         if not batch:continue
         marks=','.join('?' for _ in batch)
-        query=f'''SELECT p.item_id,s.captured_at,p.cheap10_unit_copper,p.median_unit_copper
+        query=f'''SELECT p.item_id,s.captured_at,p.cheap10_unit_copper,p.median_unit_copper,p.quantity
             FROM prices p JOIN snapshots s ON s.id=p.snapshot_id
             WHERE s.captured_at>=? AND p.item_id IN ({marks}) ORDER BY s.captured_at'''
-        for item_id,ts,cheap,median in db.execute(query,[cutoff,*batch]):
-            if cheap and cheap>0:history[item_id].append((ts,cheap,median))
+        for item_id,ts,cheap,market_median,qty in db.execute(query,[cutoff,*batch]):
+            if cheap and cheap>0:history[item_id].append((ts,cheap,market_median,qty))
     for item_id,name,cat,quality,supply,low,cheap10,cheap20,median in items:
         points=history[item_id]
         if len(points)<3 and not include_all:continue
-        # Spike detector accepts the observation tuple used by timing analysis.
-        synthetic=[(ts,price,price,supply,1,price,price) for ts,price,_ in points]
-        excluded=temporary_spike_indices(synthetic)
+        # Detect isolated jumps using both the cheapest-tier and the market median.
+        # A sudden supply collapse is a warning, not a reliable resale opportunity.
+        excluded=isolated_spikes(points,price_index=1)
+        excluded |= isolated_spikes(points,price_index=2)
         cleaned=[point for i,point in enumerate(points) if i not in excluded]
         if len(cleaned)<3 and not include_all:continue
-        distinct_dates=len({time.localtime(ts).tm_yday+(time.localtime(ts).tm_year*366) for ts,_,_ in cleaned})
-        # Conservative reference from cleaned historical cheap-10% asking prices.
-        resale=int(statistics.median([price for _,price,_ in cleaned])) if cleaned else int(median or low or 0)
+        distinct_dates=len({time.localtime(ts).tm_yday+(time.localtime(ts).tm_year*366) for ts,*_ in cleaned})
+        # Conservative lower quartile of *market* median asking prices.
+        # Historical cheapest-tier prices represent acquisition, not resale.
+        resale=conservative_resale([market for _,_,market,_ in cleaned]) or int(median or low or 0)
         # Cheapest-10% metric is a proxy, not an executable order-book quote.
         buy=int(cheap10 or low or 0)
         if buy<=0 or (resale<=buy and not include_all):continue

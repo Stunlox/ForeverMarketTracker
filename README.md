@@ -45,3 +45,13 @@ The importer now accepts additional nested output/reagent shapes and reports cou
 - Market Timing uses the shared isolated-spike detector for its selected metric, excludes flagged observations from the heatmap and timing advice, and requires repeated observations for precise timing recommendations.
 - Target Item adds historical buy and timed net/unit columns, distinct from current buy and net/unit. Historical values are estimates, not guaranteed executable orders.
 - Windows Actions artifact and EXE version set to v1.2.4e.
+
+
+## v1.2.4f — Trade Journal
+- New Trade Journal tab: predictive catalogue item entry (rarity-coloured), quantity, per-unit gold/silver/copper purchase and sale prices, sold checkbox, optional notes.
+- Save, edit, reopen or delete recorded trades; SQLite persists in the existing local database.
+- Shows unsold cost, realised P/L after AH cut, and break-even sell price.
+- Historical sell advice uses cleaned AH snapshots and requires repeated hour observations; single spikes are not reliable selling windows.
+- Sold checkbox represents **the entire recorded lot**. For partial sales, record separate lots.
+- Costs and profits are estimates: no deposit, expired auctions, or realised-sale API verification.
+- No additional ForeverDB API calls are required.

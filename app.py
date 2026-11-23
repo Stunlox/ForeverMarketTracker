@@ -17,6 +17,7 @@ from collection_service import collect_once
 from vendor_catalogue import fetch_vendors,save_inventory,vendor_classification,vendor_price_coverage
 from professions_data import fetch_professions,save_recipes
 from professions_tab import ProfessionsTab
+from trade_ledger_tab import TradeLedgerTab
 
 def resource_path(relative):
     base = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
@@ -32,7 +33,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 1.2.4e | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.2.4f | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
@@ -41,6 +42,7 @@ class Main(QMainWindow):
         self.weekday=WeekdayBuysTab(self.db);self.tabs.addTab(self.weekday,'Suggested Buys (Weekday)')
         self.target=TargetItemTab(self.db);self.tabs.addTab(self.target,'Target Item')
         self.professions=ProfessionsTab(self.db,self.settings);self.tabs.addTab(self.professions,'Professions')
+        self.journal=TradeLedgerTab(self.db,self.settings);self.tabs.addTab(self.journal,'Trade Journal')
         self.exclusions=ExclusionsTab(self.db);self.tabs.addTab(self.exclusions,'Manage Exclusions')
         for widget in (self.simplified,self.suggested,self.weekday,self.target):widget.exclusions_changed.connect(self.exclusion_refresh)
         self.health=CollectorHealthTab(self.db);self.tabs.addTab(self.health,'Collector Health');self.health.collect_requested.connect(self.scan)
@@ -54,6 +56,7 @@ class Main(QMainWindow):
         self.suggested.refresh()
         self.weekday.refresh()
         self.target.refresh()
+        self.journal.refresh()
     def setup_market(self):
         lay=QVBoxLayout(self.market);top=QHBoxLayout();lay.addLayout(top)
         self.search=QLineEdit();self.search.setPlaceholderText('Search item names...');self.search.textChanged.connect(self.refresh);top.addWidget(self.search)
@@ -215,6 +218,7 @@ class Main(QMainWindow):
         self.suggested.refresh()
         self.weekday.refresh()
         self.target.refresh()
+        self.journal.refresh()
         self.exclusions.refresh()
         self.professions.refresh()
     def show_history(self):

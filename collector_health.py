@@ -14,6 +14,7 @@ class CollectorHealthTab(QWidget):
         lay=QVBoxLayout(self)
         title=QLabel('COLLECTOR HEALTH');title.setStyleSheet('font-size:20px;font-weight:bold;');lay.addWidget(title)
         self.next_label=QLabel('Next Blizzard API pull: checking scheduler...');lay.addWidget(self.next_label)
+        self.schedule_label=QLabel('Hourly scheduler: checking...');lay.addWidget(self.schedule_label)
         self.last_label=QLabel('Last successful collection: —');lay.addWidget(self.last_label)
         self.coverage=QLabel('Last 7 days: —');lay.addWidget(self.coverage)
         self.database=QLabel('Historical database: retained indefinitely');lay.addWidget(self.database)
@@ -39,7 +40,7 @@ class CollectorHealthTab(QWidget):
         self.watcher=QFileSystemWatcher([str(LOG_PATH)], self)
         self.watcher.fileChanged.connect(self._event_log_changed)
         self._last_success=None
-        self.schedule_status={'enabled':False,'next':'Not checked'}
+        self.schedule_status={'enabled':False,'next':'Not checked','state':'unknown'}
         self.refresh()
         successes=[e for e in recent_events() if e.get('status')=='success']
         self._last_success=self.db.execute('SELECT MAX(id) FROM snapshots').fetchone()[0]
@@ -111,6 +112,7 @@ class CollectorHealthTab(QWidget):
     def refresh_local(self):
         if not getattr(self,'vendor_import_running',False):self.refresh_vendor_coverage()
         status=self.schedule_status
+        self.schedule_label.setText('Hourly scheduler: '+status.get('state','unknown').upper()+' — '+status.get('detail',''))
         self.next_label.setText('Next Blizzard API pull: '+status['next'] if status['enabled'] else 'Next Blizzard API pull: Not scheduled (enable hourly collection)')
         events=recent_events()
         if events and not self.running:

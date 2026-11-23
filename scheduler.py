@@ -32,11 +32,37 @@ def disable_task():
     if result.returncode:raise RuntimeError((result.stderr or result.stdout).strip())
 
 def task_status():
-    if os.name!='nt':return {'enabled':False,'next':'Not available outside Windows'}
-    result=_run_schtasks(['/Query','/TN',TASK_NAME,'/FO','CSV','/V'], timeout=20)
-    if result.returncode:return {'enabled':False,'next':'Not scheduled'}
+    """Report actual scheduler state, not merely whether a task exists."""
+    if os.name != 'nt':
+        return {'enabled': False, 'next': 'Unavailable outside Windows', 'state': 'unknown', 'detail': 'Windows only'}
     try:
-        row=next(csv.DictReader(io.StringIO(result.stdout)))
-        next_run=next((v for k,v in row.items() if k.strip().lower()=='next run time'),'Unknown')
-        return {'enabled':True,'next':next_run}
-    except (StopIteration,ValueError):return {'enabled':True,'next':'See Windows Task Scheduler'}
+        result = _run_schtasks(['/Query', '/TN', TASK_NAME, '/FO', 'CSV', '/V'], timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {'enabled': False, 'next': 'Unknown', 'state': 'unknown', 'detail': str(exc)}
+    if result.returncode:
+        output = (result.stderr or result.stdout or '').strip()
+        missing = any(word in output.lower() for word in ('cannot find', 'does not exist', 'not found'))
+        return {'enabled': False, 'next': 'Not scheduled' if missing else 'Unknown',
+                'state': 'missing' if missing else 'unknown', 'detail': output}
+    try:
+        row = next(csv.DictReader(io.StringIO(result.stdout)))
+        fields = {k.strip().lower(): str(v).strip() for k, v in row.items() if k}
+        next_run = fields.get('next run time', 'Unknown')
+        status = fields.get('status', '').lower()
+        schedule_state = fields.get('scheduled task state', '').lower()
+        disabled = 'disabled' in status or 'disabled' in schedule_state
+        command = fields.get('task to run', '')
+        expected = str(collector_executable())
+        wrong_path = bool(command and expected.lower() not in command.lower())
+        if disabled:
+            state = 'disabled'
+        elif wrong_path:
+            state = 'misconfigured'
+        elif not command:
+            state = 'unknown'
+        else:
+            state = 'enabled'
+        return {'enabled': state == 'enabled', 'next': next_run, 'state': state,
+                'detail': ('Collector executable path differs from this release' if wrong_path else status or schedule_state or 'No status supplied')}
+    except (StopIteration, ValueError, csv.Error) as exc:
+        return {'enabled': False, 'next': 'Unknown', 'state': 'unknown', 'detail': str(exc)}

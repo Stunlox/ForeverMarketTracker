@@ -55,3 +55,11 @@ The importer now accepts additional nested output/reagent shapes and reports cou
 - Sold checkbox represents **the entire recorded lot**. For partial sales, record separate lots.
 - Costs and profits are estimates: no deposit, expired auctions, or realised-sale API verification.
 - No additional ForeverDB API calls are required.
+
+
+## v1.2.4g — Hourly collector status
+- Persistent coloured scheduler indicator in the status bar on every tab, refreshed every 60 seconds and clickable to open Collector Health.
+- Detects missing, disabled, unknown, and stale executable-path tasks, not just existence.
+- Collector Health shows exact scheduler state and the next scheduled run.
+- No Blizzard or ForeverDB API calls are used for the status check.
+- If the task path is stale after an update, click **Enable Hourly Schedule** to recreate it pointing to the current collector EXE.

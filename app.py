@@ -1,7 +1,7 @@
 import sys, time, traceback
 from pathlib import Path
 from PySide6.QtGui import QIcon,QColor
-from PySide6.QtCore import Qt,QThread,Signal
+from PySide6.QtCore import Qt,QThread,Signal,QTimer
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLineEdit,QComboBox,QTableWidget,QTableWidgetItem,QLabel,QTabWidget,QFormLayout,QSpinBox,QMessageBox,QHeaderView,QAbstractItemView,QSplitter)
 from PySide6.QtCharts import QChart,QChartView,QLineSeries,QValueAxis
 from core import connect,load_settings,save_settings,store_snapshot,market_rows,history,copper,import_catalogue,quality_for_items,QUALITY_COLORS,QUALITY_NAMES
@@ -33,7 +33,7 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 1.2.4f | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.2.4g | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
@@ -49,7 +49,35 @@ class Main(QMainWindow):
         self.health.snapshot_saved.connect(self.refresh)
         self.config=QWidget();self.tabs.addTab(self.config,'API & Settings');self.setup_config()
         self.statusBar().showMessage('Local database ready. API not yet validated.')
+        self.schedule_indicator=QPushButton('Hourly collection: checking…')
+        self.schedule_indicator.setToolTip('Click to open Collector Health and refresh Windows Task Scheduler status')
+        self.schedule_indicator.clicked.connect(self.open_collector_status)
+        self.statusBar().addPermanentWidget(self.schedule_indicator)
+        self.scheduler_timer=QTimer(self)
+        self.scheduler_timer.setInterval(60000)
+        self.scheduler_timer.timeout.connect(self.update_scheduler_indicator)
+        self.scheduler_timer.start()
+        self.update_scheduler_indicator()
         self.refresh()
+    def open_collector_status(self):
+        self.tabs.setCurrentWidget(self.health)
+        self.update_scheduler_indicator()
+
+    def update_scheduler_indicator(self):
+        # Windows-only local scheduler query; no Blizzard/ForeverDB API requests.
+        self.health.refresh()
+        status=self.health.schedule_status
+        state=status.get('state','unknown')
+        captions={'enabled':'HOURLY ON','disabled':'HOURLY DISABLED',
+                  'missing':'HOURLY MISSING','misconfigured':'HOURLY PATH ERROR','unknown':'HOURLY UNKNOWN'}
+        self.schedule_indicator.setText(captions.get(state,'HOURLY UNKNOWN'))
+        colors={'enabled':('#143e32','#8ce6b4'), 'disabled':('#572a2a','#ffb3b3'),
+                'missing':('#572a2a','#ffb3b3'), 'misconfigured':('#572a2a','#ffb3b3'),
+                'unknown':('#5b491e','#ffe09a')}
+        bg,fg=colors.get(state,colors['unknown'])
+        self.schedule_indicator.setStyleSheet(f'QPushButton {{background:{bg};color:{fg};padding:5px 10px;border-radius:4px;font-weight:bold;}}')
+        self.schedule_indicator.setToolTip(f"{status.get('detail','')} | Next: {status.get('next','Unknown')} | Click for Collector Health")
+
     def exclusion_refresh(self):
         self.exclusions.refresh()
         self.simplified.refresh()

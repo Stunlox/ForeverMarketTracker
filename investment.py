@@ -64,6 +64,9 @@ def candidates(db,days=30,category='Trade Goods',min_supply=1,cut_pct=5,limit=30
             'supply':supply,'affordable_supply':max(1,math.floor(supply*.10)),'buy':buy,'resale':resale,'net_per_unit':net_per_unit,
             'margin':net_per_unit/buy*100,'snapshots':len(cleaned),'dates':distinct_dates,
             'confidence':'Insufficient data' if len(cleaned)<3 else 'Low data' if distinct_dates<3 else 'Moderate' if distinct_dates<7 else 'Good' if distinct_dates<14 else 'High'})
+    from exclusions import excluded_ids
+    blocked=excluded_ids(db)
+    result=[r for r in result if r['item_id'] not in blocked]
     result.sort(key=lambda d:(-d['net_per_unit'],-d['margin']))
     return result[:max(1,int(limit)) if include_all else max(1,min(300,int(limit))) ]
 

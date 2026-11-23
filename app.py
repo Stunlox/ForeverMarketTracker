@@ -10,6 +10,8 @@ from timing_tab import MarketTimingTab
 from simplified_tab import SimplifiedTimingTab
 from collector_health import CollectorHealthTab
 from investment_tab import SuggestedBuysTab,TargetItemTab
+from exclusions_tab import ExclusionsTab
+from exclusions import import_vendor_metadata
 from collection_service import collect_once
 
 def resource_path(relative):
@@ -26,18 +28,25 @@ class Worker(QThread):
 class Main(QMainWindow):
     def __init__(self):
         super().__init__();self.db=connect();self.settings=load_settings();self.last_check=0;self.worker=None;self.catalogue_running=False
-        self.setWindowTitle('Forever Market Tracker 1.2 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
+        self.setWindowTitle('Forever Market Tracker 1.2.1 | Alliance PvP');self.setWindowIcon(QIcon(resource_path('assets/app_icon.png')));self.resize(1300,820)
         self.tabs=QTabWidget();self.setCentralWidget(self.tabs)
         self.market=QWidget();self.tabs.addTab(self.market,'Market Browser');self.setup_market()
         self.timing=MarketTimingTab(self.db);self.tabs.addTab(self.timing,'Market Timing')
         self.simplified=SimplifiedTimingTab(self.db);self.tabs.addTab(self.simplified,'Market Timing Simplified')
         self.suggested=SuggestedBuysTab(self.db);self.tabs.addTab(self.suggested,'Suggested Buys')
         self.target=TargetItemTab(self.db);self.tabs.addTab(self.target,'Target Item')
+        self.exclusions=ExclusionsTab(self.db);self.tabs.addTab(self.exclusions,'Manage Exclusions')
+        for widget in (self.simplified,self.suggested,self.target):widget.exclusions_changed.connect(self.exclusion_refresh)
         self.health=CollectorHealthTab(self.db);self.tabs.addTab(self.health,'Collector Health');self.health.collect_requested.connect(self.scan)
         self.health.snapshot_saved.connect(self.refresh)
         self.config=QWidget();self.tabs.addTab(self.config,'API & Settings');self.setup_config()
         self.statusBar().showMessage('Local database ready. API not yet validated.')
         self.refresh()
+    def exclusion_refresh(self):
+        self.exclusions.refresh()
+        self.simplified.refresh()
+        self.suggested.refresh()
+        self.target.refresh()
     def setup_market(self):
         lay=QVBoxLayout(self.market);top=QHBoxLayout();lay.addLayout(top)
         self.search=QLineEdit();self.search.setPlaceholderText('Search item names...');self.search.textChanged.connect(self.refresh);top.addWidget(self.search)
@@ -108,7 +117,10 @@ class Main(QMainWindow):
         def fn():
             items=fetch_catalogue(self.settings)
             db=connect()
-            try:return import_catalogue(db,items)
+            try:
+                count=import_catalogue(db,items)
+                import_vendor_metadata(db,items)
+                return count
             finally:db.close()
         def done(count):
             self.catalogue_status.setText(f'Full catalogue imported: {count:,} items')
@@ -134,6 +146,7 @@ class Main(QMainWindow):
         self.simplified.refresh()
         self.suggested.refresh()
         self.target.refresh()
+        self.exclusions.refresh()
     def show_history(self):
         selection=self.table.selectedItems()
         if not selection:return

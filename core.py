@@ -35,6 +35,8 @@ def connect():
         if column not in columns: db.execute(f'ALTER TABLE prices ADD COLUMN {column} INTEGER')
     item_columns={r[1] for r in db.execute('PRAGMA table_info(items)')}
     if 'quality' not in item_columns: db.execute('ALTER TABLE items ADD COLUMN quality INTEGER')
+    from exclusions import migrate
+    migrate(db)
     db.commit()
     return db
 

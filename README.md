@@ -1,3 +1,12 @@
+# Forever Market Tracker v1.2.1 — Timing & Exclusions
+
+- Suggested Buys and Target Item now display historical weekday/hour buy and sell slots in UK local time. These are estimates from auction asking prices, not future guarantees.
+- Right-click an item in either investment tab or Market Timing Simplified to exclude it; choose vendor (manual) for known vendor items.
+- Manage Exclusions tab lists excluded items and restores manually excluded items.
+- Verified vendor-only flags are imported only if explicitly provided by ForeverDB (`vendorOnly` or `vendor_only` true). There is no reliable vendor classification otherwise; do not infer vendor status from name.
+- Exclusions persist in the existing SQLite database and do not remove market history. Market Browser still shows all items.
+- No completed-sales estimates added.
+
 # Forever Market Tracker v1.2
 
 ## What's new

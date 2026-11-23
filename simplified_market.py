@@ -72,5 +72,8 @@ def top_deals(db,days=90,min_supply=100,cut_pct=5,limit=40,
             'sell_samples':sell['count'],'buy_weeks':len(weeks[buy_slot]),
             'sell_weeks':len(weeks[sell_slot]),'confidence':confidence,
             'score':score,'dates':len(dates),'snapshots':len(rows)})
+    from exclusions import excluded_ids
+    blocked=excluded_ids(db)
+    candidates=[c for c in candidates if c['item_id'] not in blocked]
     candidates.sort(key=lambda x:(-x['score'],-x['margin_pct'],x['name'].casefold()))
     return candidates[:max(1,min(300,int(limit)))],checked

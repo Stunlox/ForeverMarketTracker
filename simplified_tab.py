@@ -1,13 +1,15 @@
 """Up to 300 ranked historical timing opportunities."""
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt,Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,
-    QSpinBox,QCheckBox,QDoubleSpinBox,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView)
+    QSpinBox,QCheckBox,QDoubleSpinBox,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QMenu)
 from simplified_market import top_deals
+from exclusions import exclude
 from market_timing import categories
 from core import copper,quality_for_items,QUALITY_COLORS,QUALITY_NAMES
 
 class SimplifiedTimingTab(QWidget):
+    exclusions_changed=Signal()
     def __init__(self,db,parent=None):
         super().__init__(parent);self.db=db
         layout=QVBoxLayout(self);controls=QHBoxLayout();layout.addLayout(controls)
@@ -37,6 +39,8 @@ class SimplifiedTimingTab(QWidget):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSortingEnabled(False)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.exclude_menu)
         header=self.table.horizontalHeader();header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1,QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table,1)
@@ -54,6 +58,18 @@ class SimplifiedTimingTab(QWidget):
         self.spikes.toggled.connect(self.refresh)
         self.refresh()
 
+    def exclude_menu(self,pos):
+        row=self.table.rowAt(pos.y())
+        if row<0:return
+        cell=self.table.item(row,1)
+        if cell is None:return
+        ident=cell.data(Qt.ItemDataRole.UserRole)
+        if ident is None:return
+        menu=QMenu(self.table);action=menu.addAction('Exclude this item from recommendations')
+        vendor=menu.addAction('Exclude as vendor item (manual)')
+        selected=menu.exec(self.table.viewport().mapToGlobal(pos))
+        if selected in (action,vendor):
+            exclude(self.db,ident,'Vendor (manual)' if selected==vendor else 'Manual');self.exclusions_changed.emit()
     def refresh(self,*_):
         days=int(self.days.currentText().split()[0])
         deals,checked=top_deals(self.db,days=days,min_supply=self.supply.value(),cut_pct=self.cut.value(),category=self.category.currentText(),limit=int(self.limit.currentText()),min_profit_gold=self.min_profit.value(),exclude_spikes=self.spikes.isChecked())
@@ -65,6 +81,7 @@ class SimplifiedTimingTab(QWidget):
                     f"{d['buy_samples']} / {d['sell_samples']}",d['confidence']]
             for j,value in enumerate(values):
                 item=QTableWidgetItem(value)
+                item.setData(Qt.ItemDataRole.UserRole,d["item_id"])
                 item.setToolTip(f"{d['snapshots']} snapshots across {d['dates']} dates. Buy slot: {d['buy_weeks']} weeks; sell slot: {d['sell_weeks']} weeks. Estimated net margin excludes deposits and failed sales.")
                 if j==1 and qualities.get(d['item_id']) in QUALITY_COLORS:
                     quality=qualities[d['item_id']];item.setForeground(QColor(QUALITY_COLORS[quality]))

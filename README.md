@@ -64,5 +64,8 @@ The importer now accepts additional nested output/reagent shapes and reports cou
 - No Blizzard or ForeverDB API calls are used for the status check.
 - If the task path is stale after an update, click **Enable Hourly Schedule** to recreate it pointing to the current collector EXE.
 
-### v1.2.4h — Buy Now & Hold
+### v1.2.4i — Buy Now & Hold
 Uses fresh local AH snapshots and repeated historical UK weekday/six-hour windows (at least two distinct dates), conservative competitive asking prices, vendor/manual exclusions, rarity and volume filters, configurable budget, holding horizon and minimum net ROI. Stale snapshots over two hours suppress recommendations. Prepare a journal entry and verify the actual purchase before saving. No extra API calls. Historical asking prices do not guarantee sales.
+
+## v1.2.4i
+Buy Now & Hold falls back to daily six-hour windows supported by at least two distinct dates when weekly evidence is insufficient. Scheduler unchanged.

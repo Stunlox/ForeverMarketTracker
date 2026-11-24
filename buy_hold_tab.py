@@ -18,7 +18,7 @@ class BuyHoldTab(BaseInvestmentTab):
         bar.addWidget(QLabel('Minimum net ROI %'));self.roi=QDoubleSpinBox();self.roi.setRange(0,1000);self.roi.setValue(5);bar.addWidget(self.roi)
         self.table=self.create_table(['Item','Rarity','AH qty','Buy/unit','Target/unit','Qty','Spend','Net profit','ROI','Sell window (UK)','Confidence'])
         button=QPushButton('Prepare selected purchase in Trade Journal');button.clicked.connect(self.prepare);self.layout.addWidget(button)
-        note=QLabel('Requires at least two separate dates for a recurring weekday / six-hour window. Uses competitive asking prices, not completed sales. Max 35% of budget per item, 10% of latest supply. Verify live prices; deposits excluded.');note.setWordWrap(True);self.layout.addWidget(note)
+        note=QLabel('Uses recurring weekday windows when available, otherwise daily six-hour patterns across at least two dates. Low confidence = limited daily evidence. Uses competitive asking prices, not completed sales. Max 35% of budget per item, 10% of latest supply. Verify live prices; deposits excluded.');note.setWordWrap(True);self.layout.addWidget(note)
         self.rarity.currentIndexChanged.connect(self.refresh);self.hold.currentIndexChanged.connect(self.refresh);self.roi.valueChanged.connect(self.refresh)
         self.refresh()
     def refresh(self,*_):
@@ -27,7 +27,7 @@ class BuyHoldTab(BaseInvestmentTab):
         self.render(self.table,[(r,[r['name'],QUALITY_NAMES.get(r['quality'],'Unknown'),r['supply'],copper(r['buy']),copper(r['resale']),r['quantity'],copper(r['cost']),copper(r['profit']),f"{r['margin']:.1f}%",r['window'],f"{r['confidence']} ({r['dates']} dates)"]) for r in self.records])
         age=(time.time()-stamp)/60 if stamp else None
         if age is None or age>120:self.summary.setText('No fresh AH snapshot — collect data before buying.');return
-        self.summary.setText(f'{len(self.records)} opportunities | Snapshot {max(0,age):.0f} min old | Spend {copper(sum(r["cost"] for r in self.records))} | Estimated profit {copper(sum(r["profit"] for r in self.records))}. No results may mean insufficient repeated history.')
+        self.summary.setText(f'{len(self.records)} opportunities | Snapshot {max(0,age):.0f} min old | Spend {copper(sum(r["cost"] for r in self.records))} | Estimated profit {copper(sum(r["profit"] for r in self.records))}. If empty: try a longer hold/history, lower ROI or quantity threshold; at least two dates in a selling window are required.')
     def prepare(self):
         row=self.table.currentRow()
         if row<0 or row>=len(self.records):return

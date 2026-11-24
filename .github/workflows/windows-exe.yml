@@ -43,11 +43,11 @@ jobs:
             "$hash  $path"
           }
           $lines | Set-Content -Encoding ascii release/SHA256SUMS.txt
-          Compress-Archive -Path release/* -DestinationPath ForeverMarketTracker-Windows-v1.2.4g-Portable.zip -CompressionLevel Optimal
+          Compress-Archive -Path release/* -DestinationPath ForeverMarketTracker-Windows-v1.2.4h-Portable.zip -CompressionLevel Optimal
       - name: Upload portable Windows distribution
         uses: actions/upload-artifact@v4
         with:
-          name: ForeverMarketTracker-Windows-v1.2.4g-Portable
-          path: ForeverMarketTracker-Windows-v1.2.4g-Portable.zip
+          name: ForeverMarketTracker-Windows-v1.2.4h-Portable
+          path: ForeverMarketTracker-Windows-v1.2.4h-Portable.zip
           if-no-files-found: error
           retention-days: 30
